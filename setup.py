@@ -24,6 +24,6 @@ setup(
         'mne',
         'mne-bids',
         'umap-learn',
-        'ieeg==0.6.0',  # pinned: 0.7.0 may contain breaking API changes
+        'ieeg==0.7.0',  # pinned to the version validated in the lab's DCC env
     ],
 )
