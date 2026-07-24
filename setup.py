@@ -24,6 +24,6 @@ setup(
         'mne',
         'mne-bids',
         'umap-learn',
-        'ieeg>=0.6',
+        'ieeg==0.6.0',  # pinned: 0.7.0 may contain breaking API changes
     ],
 )
