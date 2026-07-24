@@ -11,6 +11,67 @@ too big to hold in your head*.
 
 ---
 
+## 0. Status — what has already been done
+
+**`decoding/decoding.py` has been split** (the §4 plan below, executed). The
+4,752-line monolith is now a 125-line **facade** that re-exports from focused
+submodules:
+
+| Module | Lines | Holds |
+|--------|------:|-------|
+| `decoding.py` | 125 | facade — re-exports every public name (nothing else) |
+| `data_prep.py` | 284 | balancing, `mixup2`, `flatten_features`, `sample_fold` |
+| `decoder.py` | 471 | the `Decoder` class + `cv_cm_*` methods |
+| `accuracy_stats.py` | 970 | permutation / bootstrap / cluster stats on accuracies |
+| `tfr_cluster.py` | 550 | sig-TFR masks + cluster decoding |
+| `roi_confusion.py` | 262 | per-ROI confusion-matrix orchestration |
+| `context_comparison.py` | 293 | `run_context_comparison_analysis` + overlay |
+| `plots/accuracies.py` | 866 | nature-style accuracy plots |
+| `plots/confusion.py` | 377 | confusion-matrix + cm-trace plots |
+| `plots/trajectories.py` | 673 | PCA / UMAP projections + trajectories |
+| `plots/style.py` | 28 | shared `NATURE_STYLE` constant |
+
+Every one of the 46 original functions/classes was moved **verbatim** into
+exactly one module, and every existing `from src.analysis.decoding.decoding
+import ...` still resolves through the facade — no caller was touched. The two
+"cheap wins" (§7) were also applied to this package: the `general_utils`
+star-import and the hardcoded `C:/Users/...` path are gone from `decoding.py`.
+
+**Two pre-existing bugs surfaced during the split** (both were already latent in
+the old monolith; neither was introduced here, and neither was silently
+"fixed" so the refactor stays a pure move):
+
+1. `plot_and_save_tfr_masks` (now in `plots/confusion.py`) calls
+   `plot_mask_pages`, which is **never imported** — it lives in
+   `spec/wavelet_functions.py`. That code path raises `NameError` if reached.
+   Fix: add `from src.analysis.spec.wavelet_functions import plot_mask_pages`
+   (verify it doesn't create an import cycle first).
+2. `dcc_scripts/spec/get_sig_tfr_differences_dcc.py` and
+   `dcc_scripts/decoding/james_sun_cluster_decoding_dcc.py` both
+   `import plot_accuracies` from `decoding.decoding`, but **no such function
+   exists** (likely a stale rename of `plot_accuracies_nature_style`). Those
+   imports were already broken.
+
+**Still monolithic** (not yet split): `power/power_traces.py` (§5) and
+`utils/general_utils.py` (§6).
+
+### Installation (needed now that the path hacks are gone)
+
+The decoding modules no longer patch `sys.path`, so the two packages must be
+importable the normal way. From the repo root, once per environment:
+
+```bash
+pip install -e .                 # makes `src.analysis...` importable
+pip install -e ./IEEG_Pipelines  # makes `ieeg` importable (init the submodule first:
+                                 #   git submodule update --init)
+```
+
+The other analysis files (preproc, spec, dcc_scripts) still carry the old
+`sys.path.append("C:/Users/jz421/...")` line; sweeping those is the natural
+next cheap win once the editable installs above are confirmed working.
+
+---
+
 ## 1. The goal, stated precisely
 
 The problem with the big files is **not** that they do too much work — it's
