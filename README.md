@@ -5,6 +5,25 @@ Contact: Jim Zhang and Raphael Geddert
 jim.zhang@duke.edu, raphael.geddert@duke.edu
 
 Last edited: 01/16/2024
+
+### Python environment setup
+
+The analysis code lives in the importable `src` package. Set it up once per
+environment (per machine / per conda env) from the repo root:
+
+```bash
+pip install -e .
+```
+
+This installs the project **and its dependencies** — including `ieeg` (from
+PyPI), `mne`, `umap-learn`, etc. — as declared in `setup.py`. After this,
+`from src.analysis.decoding.decoding import Decoder` (and the rest) works from
+anywhere, with no `sys.path` hacks. `-e` is an *editable* install, so your edits
+to `src/...` take effect immediately without reinstalling.
+
+> If you keep a separate conda env for `ieeg`, activate it first; most
+> dependencies are already present there and pip will only add what's missing.
+
 ### Initial Preprocessing (getting the EDF, aligning triggers with events)
 1. Nicole wrote docs on this in Box/CoganLab/CRS Resources/Preprocessing. Focus on Global Local Preprocessing and BIDS Guide
 2. Data is in Box/CoganLab/ECoG_TaskData. TaskUploadDir is where the edfs are (made by cropping Natus recording) using the start and stop times of the experiment. Cogan_Task_Data is where the behavioral data is, sorted by subject

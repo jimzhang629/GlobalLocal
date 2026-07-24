@@ -57,18 +57,24 @@ the old monolith; neither was introduced here, and neither was silently
 
 ### Installation (needed now that the path hacks are gone)
 
-The decoding modules no longer patch `sys.path`, so the two packages must be
-importable the normal way. From the repo root, once per environment:
+The decoding modules no longer patch `sys.path`, so `src` and `ieeg` must be
+importable the normal way. Dependencies (including `ieeg`, which is a normal
+PyPI package) are declared in `setup.py`, so a single command does it — from
+the repo root, once per environment:
 
 ```bash
-pip install -e .                 # makes `src.analysis...` importable
-pip install -e ./IEEG_Pipelines  # makes `ieeg` importable (init the submodule first:
-                                 #   git submodule update --init)
+pip install -e .    # installs the project AND its dependencies (ieeg, mne, umap-learn, ...)
 ```
+
+`-e` is an *editable* install: it links to the source folder, so your edits to
+`src/...` take effect immediately with no reinstall. You only run it once per
+environment (per machine / per conda env), not once per session. In the
+existing `ieeg` conda env most deps are already present, so pip just adds what's
+missing.
 
 The other analysis files (preproc, spec, dcc_scripts) still carry the old
 `sys.path.append("C:/Users/jz421/...")` line; sweeping those is the natural
-next cheap win once the editable installs above are confirmed working.
+next cheap win now that `pip install -e .` provides `ieeg` on the path.
 
 ---
 
