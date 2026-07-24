@@ -14,6 +14,7 @@ import pandas as pd
 from itertools import combinations
 from statsmodels.formula.api import ols
 from statsmodels.stats.anova import anova_lm
+from statsmodels.stats.multitest import multipletests
 from joblib import Parallel, delayed
 
 from src.analysis.utils.general_utils import windower
@@ -193,7 +194,6 @@ def run_within_electrode_windowed_anova_cluster_correction(
     from pathlib import Path
     import pandas as pd
     from joblib import Parallel, delayed
-    from statsmodels.stats.multitest import multipletests
 
     # === 1. Long-form dataframe (reuse existing builder) ===
     df = create_windowed_anova_dataframe(

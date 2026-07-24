@@ -71,13 +71,13 @@ but the six unused `general_utils` names and the `find_significant_clusters_...`
 import were dead and are gone, and the `sys.path`/`__file__` juggling at the top
 of the file was deleted (relies on `pip install -e .`).
 
-**One pre-existing bug surfaced during the split** (latent in the old monolith;
-not introduced here, and not silently "fixed" so the refactor stays a pure
-move): `apply_fdr_correction_to_windowed_results` (now in `windowed_anova.py`)
-calls `multipletests`, which is only ever imported **locally inside**
-`run_within_electrode_windowed_anova_cluster_correction` — so it was never in
-module scope. That code path raises `NameError` if reached. Fix: add
-`from statsmodels.stats.multitest import multipletests` at module level.
+**One pre-existing bug surfaced during the split and was fixed** (latent in the
+old monolith, not introduced by the move): `apply_fdr_correction_to_windowed_results`
+(now in `windowed_anova.py`) calls `multipletests`, which the monolith only ever
+imported **locally inside** `run_within_electrode_windowed_anova_cluster_correction`
+— so it was never in module scope, and that code path raised `NameError` if
+reached. Fixed by hoisting `from statsmodels.stats.multitest import multipletests`
+to module level (and dropping the now-redundant local import).
 
 **Still monolithic** (not yet split): `utils/general_utils.py` (§6).
 
