@@ -52,8 +52,34 @@ the old monolith; neither was introduced here, and neither was silently
    exists** (likely a stale rename of `plot_accuracies_nature_style`). Those
    imports were already broken.
 
-**Still monolithic** (not yet split): `power/power_traces.py` (§5) and
-`utils/general_utils.py` (§6).
+**`power/power_traces.py` has been split** (the §5 plan below, executed). The
+~2,420-line monolith is now an 81-line **facade** that re-exports from three
+focused submodules:
+
+| Module | Lines | Holds |
+|--------|------:|-------|
+| `power_traces.py` | 81 | facade — re-exports every public name (nothing else) |
+| `evoked_builders.py` | 405 | per-electrode / multi-channel evokeds, ROI grand averages, condition subtraction, `time_perm_cluster_between_two_evokeds` |
+| `windowed_anova.py` | 1,170 | long-form windowed dataframe, per-window OLS/ANOVA fits, within-/across-electrode permutation cluster correction, FDR, `load_significant_electrodes` |
+| `plots.py` | 826 | `plot_power_trace(s)_for_roi(s)`, 2-way / 16-condition interaction plots, `DEFAULT_PLOT_STYLE`, style + color helpers, `anova_results_to_interaction_results_for_plotting` |
+
+All 43 original functions were moved **verbatim** into exactly one module, and
+every existing `from src.analysis.power.power_traces import ...` still resolves
+through the facade — no caller was touched. The two cheap wins (§7) were applied
+here too: the `general_utils` explicit-import list had no star-import to remove,
+but the six unused `general_utils` names and the `find_significant_clusters_...`
+import were dead and are gone, and the `sys.path`/`__file__` juggling at the top
+of the file was deleted (relies on `pip install -e .`).
+
+**One pre-existing bug surfaced during the split and was fixed** (latent in the
+old monolith, not introduced by the move): `apply_fdr_correction_to_windowed_results`
+(now in `windowed_anova.py`) calls `multipletests`, which the monolith only ever
+imported **locally inside** `run_within_electrode_windowed_anova_cluster_correction`
+— so it was never in module scope, and that code path raised `NameError` if
+reached. Fixed by hoisting `from statsmodels.stats.multitest import multipletests`
+to module level (and dropping the now-redundant local import).
+
+**Still monolithic** (not yet split): `utils/general_utils.py` (§6).
 
 ### Installation (needed now that the path hacks are gone)
 
