@@ -96,7 +96,10 @@ import numpy as np
 import pandas as pd
 
 import matplotlib
-matplotlib.use('Agg')          # headless / cluster
+from src.analysis.utils.mpl_backend import ensure_headless_backend
+# Headless on the cluster, but a no-op when a notebook imported this module
+# for its helpers -- forcing Agg there silently breaks %matplotlib inline.
+ensure_headless_backend()
 import matplotlib.pyplot as plt
 
 from src.analysis.stats import stability_flexibility_segregation as sfs

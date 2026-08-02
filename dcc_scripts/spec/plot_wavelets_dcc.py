@@ -20,7 +20,9 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 import matplotlib
-matplotlib.use('Agg')  # headless backend for the cluster
+from src.analysis.utils.mpl_backend import ensure_headless_backend
+# Headless on the cluster; leaves a notebook's inline backend alone.
+ensure_headless_backend()
 import matplotlib.pyplot as plt
 
 from ieeg.viz.ensemble import chan_grid

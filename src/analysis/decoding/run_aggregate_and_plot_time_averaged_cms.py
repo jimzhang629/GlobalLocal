@@ -14,7 +14,9 @@ if project_root not in sys.path:
     
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')
+from src.analysis.utils.mpl_backend import ensure_headless_backend
+# Headless on the cluster; leaves a notebook's inline backend alone.
+ensure_headless_backend()
 import matplotlib.pyplot as plt
 from sklearn.metrics import ConfusionMatrixDisplay
 

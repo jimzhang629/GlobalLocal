@@ -920,3 +920,44 @@ The `<name>` it writes (e.g. `Stimulus_1sec_preStimulusBase_decFactor_10`) is th
 (four-group definition), `tests/analysis/decoding/test_cross_decoding_circularity.py`
 (diagonal guard), `tests/analysis/decoding/test_trial_splitting.py` (disjoint split),
 plus the A5/A6 tests.
+
+---
+
+## 11. Troubleshooting: "Qt5Agg backend not available" and plots that never appear
+
+Symptom, in a notebook on the DCC:
+
+```
+Qt5Agg backend not available, using default backend
+```
+
+…and from that cell onward every `plt.show()` produces **nothing** — no figure,
+no error.
+
+The message itself is harmless: `ieeg.viz.*` calls `matplotlib.use("Qt5Agg")`
+when it is imported, there is no X server on the cluster, so matplotlib says so
+and falls back. The damage is the *backend switch*. `%matplotlib inline` at the
+top of the notebook is undone, and the non-interactive backend that replaces it
+draws figures into a buffer nobody displays. The cluster scripts did the same
+thing more bluntly with `matplotlib.use('Agg')` at import time, which bit as
+soon as a notebook imported one of them for its helpers (e.g.
+`assemble_long_df` from `stability_flexibility_segregation_dcc.py`).
+
+`src/analysis/utils/mpl_backend.py` holds the fix:
+
+| Helper | Use it for |
+|---|---|
+| `preserve_backend()` | context manager around imports that hijack the backend (`general_utils` wraps its `ieeg` imports in it) |
+| `ensure_headless_backend()` | replaces `matplotlib.use('Agg')` in scripts — still Agg in a fresh cluster process, but a no-op when a notebook already chose inline |
+| `use_inline_backend()` | call from a notebook to put inline back if figures stop showing |
+
+If plots vanish mid-notebook (an import not yet covered), you don't need to
+restart the kernel — run either of these and re-run the plotting cell:
+
+```python
+from src.analysis.utils.mpl_backend import use_inline_backend
+use_inline_backend()
+# or just: %matplotlib inline
+```
+
+Tests: `tests/analysis/utils/test_mpl_backend.py`.

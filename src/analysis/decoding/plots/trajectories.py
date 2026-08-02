@@ -1,7 +1,9 @@
 """Low-dimensional (PCA / UMAP) projections and trajectory plots."""
 
 import matplotlib
-matplotlib.use('Agg')
+from src.analysis.utils.mpl_backend import ensure_headless_backend
+# Headless on the cluster; leaves a notebook's inline backend alone.
+ensure_headless_backend()
 import os
 import numpy as np
 import pandas as pd

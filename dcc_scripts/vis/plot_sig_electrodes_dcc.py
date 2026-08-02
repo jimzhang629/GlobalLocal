@@ -30,7 +30,9 @@ import json
 from collections import Counter, OrderedDict
 
 import matplotlib
-matplotlib.use("Agg")  # headless: never open a window on the cluster
+from src.analysis.utils.mpl_backend import ensure_headless_backend
+# Headless on the cluster; leaves a notebook's inline backend alone.
+ensure_headless_backend()
 import matplotlib.pyplot as plt
 
 # ---------------------------------------------------------------------------

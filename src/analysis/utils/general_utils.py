@@ -23,14 +23,23 @@ import mne
 import json
 import numpy as np
 import pandas as pd
-from ieeg.navigate import channel_outlier_marker, trial_ieeg, crop_empty_data, \
-    outliers_to_nan
-from ieeg.io import raw_from_layout, get_data
-from ieeg.timefreq.utils import crop_pad
-from ieeg.timefreq import gamma
-from ieeg.calc.scaling import rescale
-from ieeg.calc.stats import time_perm_cluster, window_averaged_shuffle, find_outliers
-from ieeg.viz.mri import gen_labels
+
+from src.analysis.utils.mpl_backend import preserve_backend
+
+# `ieeg.viz` calls matplotlib.use("Qt5Agg") at import time; on a headless machine
+# that fails ("Qt5Agg backend not available, using default backend") and leaves us
+# on a non-interactive backend, which silently kills plt.show() in notebooks that
+# ran %matplotlib inline. Keep whatever backend the caller had chosen.
+with preserve_backend():
+    from ieeg.navigate import channel_outlier_marker, trial_ieeg, crop_empty_data, \
+        outliers_to_nan
+    from ieeg.io import raw_from_layout, get_data
+    from ieeg.timefreq.utils import crop_pad
+    from ieeg.timefreq import gamma
+    from ieeg.calc.scaling import rescale
+    from ieeg.calc.stats import time_perm_cluster, window_averaged_shuffle, find_outliers
+    from ieeg.viz.mri import gen_labels
+
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 from collections import OrderedDict, defaultdict

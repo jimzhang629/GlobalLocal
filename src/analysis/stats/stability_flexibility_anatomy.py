@@ -296,7 +296,9 @@ def plot_roi_group_histograms(labels_with_roi, out_path=None,
     cover it, so the reader can weight raw counts against placement. Returns the
     matplotlib Figure (and saves it when ``out_path`` is given)."""
     import matplotlib
-    matplotlib.use('Agg')
+    from src.analysis.utils.mpl_backend import ensure_headless_backend
+    # Headless on the cluster; leaves a notebook's inline backend alone.
+    ensure_headless_backend()
     import matplotlib.pyplot as plt
 
     tab = roi_group_histogram(labels_with_roi, groups=groups)
