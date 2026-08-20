@@ -453,12 +453,14 @@ def write_summary(labels, res, save_dir, meta, control=None, alpha=0.05):
     if not labels.attrs.get('alpha_applies', True):
         lines.append(
             f"  NOTE: correction={labels.attrs.get('correction')!r} adopts the "
-            "power-traces run's own significance verdict verbatim, so nothing "
-            f"was corrected or thresholded here and alpha={alpha} is INERT. The "
-            "run's BH family is its own (all electrodes in that roi/effect, one "
-            "row per surviving cluster, hardcoded alpha=0.05) -- it is not this "
-            "analysis's post-alignment denominator. Use correction='fdr_bh' to "
-            "correct over the electrodes the 2x2 is actually built on.")
+            "power-traces run's own significance verdict verbatim, so no "
+            "electrode was selected by alpha here -- the run fixed its own "
+            "cutoffs at run time. (alpha still applies to the continuous "
+            "confound control below, if it ran.) The run's BH family is its own: "
+            "all electrodes in that roi/effect, one row per surviving cluster, "
+            "hardcoded alpha=0.05 -- NOT this analysis's post-alignment "
+            "denominator. Use correction='fdr_bh' to correct over the electrodes "
+            "the 2x2 is actually built on.")
     if 'sweep' in res and len(res['sweep']):
         lines += _sweep_warning(res['sweep'])
     if labels.attrs.get('n_dropped'):

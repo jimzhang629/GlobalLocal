@@ -44,6 +44,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from dcc_scripts.stats.power_traces_conjunction_dcc import main
+from src.analysis.stats.power_traces_conjunction import CORRECTIONS, RUN_CORRECTIONS
 
 # ---------------------------------------------------------------------------
 # DATA SOURCE
@@ -97,6 +98,12 @@ ROIS = 'all' if ROIS.strip() == 'all' else [r.strip() for r in ROIS.split(',') i
 #   'run_cluster' any cluster that cleared the run's extent threshold; the
 #                 load_significant_electrodes(use_fdr=False) set
 CORRECTION = os.environ.get('CORRECTION', 'fdr_bh')
+if CORRECTION not in CORRECTIONS:
+    raise ValueError(f"CORRECTION must be one of {CORRECTIONS}; got {CORRECTION!r}")
+# The run_* modes re-threshold nothing, so ALPHA has no effect on them and is
+# left out of their output path -- a directory named `..._alpha0.05` that alpha
+# never touched invites a comparison between runs that does not exist.
+ALPHA_APPLIES = CORRECTION not in RUN_CORRECTIONS
 ALPHA = float(os.environ.get('ALPHA', '0.05'))
 # 'interaction': LWPC x LWPS; 'main': congruency x switch-type main effects.
 EFFECT_MODE = os.environ.get('EFFECT_MODE', 'interaction')
@@ -171,8 +178,11 @@ if DATA_SOURCE == 'synthetic':
 else:
     _ref = PT_RUN if PT_RUN else (PT_RUN_DIRS.get('CPC') or 'unknown_run')
     _tag = os.path.basename(os.path.normpath(_ref))
-SAVE_DIR = os.path.join(current_script_dir, 'results', EPOCHS_ROOT_FILE, 'power_traces_conjunction_results',
-                        _tag, f'{CORRECTION}_alpha{ALPHA}')
+# Existing fdr_bh/cluster/none output paths are unchanged; only the run_* modes,
+# which have no alpha to record, get the bare correction name.
+_leaf = f'{CORRECTION}_alpha{ALPHA}' if ALPHA_APPLIES else CORRECTION
+SAVE_DIR = os.path.join(current_script_dir, 'results', EPOCHS_ROOT_FILE,
+                        'power_traces_conjunction_results', _tag, _leaf)
 if EFFECT_MODE == 'main':
     # Keep existing interaction output paths stable and prevent main-effect runs
     # from overwriting them.
@@ -227,7 +237,9 @@ def run_analysis():
         for g, p in sorted(PT_RUN_DIRS.items()):
             print(f"Run {g}:           {p}")
     print(f"ROIs:             {ROIS}")
-    print(f"Correction:       {CORRECTION} | alpha: {ALPHA}")
+    print(f"Correction:       {CORRECTION} | alpha: "
+          + (f"{ALPHA}" if ALPHA_APPLIES else
+             "n/a (the run's own verdict is adopted; nothing thresholded here)"))
     print(f"Effect mode:      {EFFECT_MODE}")
     print(f"require_all:      {REQUIRE_ALL} | use_npz (legacy runs): {USE_NPZ}")
     print(f"n_perm_null:      {N_PERM_NULL} | thresholds: {THRESHOLDS}")
