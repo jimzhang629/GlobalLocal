@@ -19,9 +19,10 @@ from src.analysis.stats import power_traces_conjunction as ptc
 # fixtures: a fake within-electrode ANOVA run on disk
 # ----------------------------------------------------------------------------
 def _summary_rows(subject, electrode, roi, effect, p, extent=0, sign=0,
-                  best_p=None):
+                  best_p=None, sig_after_fdr=None):
     """A summary.csv row. `best_p=None` omits the graded columns entirely, which
-    is how legacy runs (written before `best_cluster_p` existed) look on disk."""
+    is how legacy runs (written before `best_cluster_p` existed) look on disk.
+    `sig_after_fdr=None` omits the run's own BH verdict, likewise."""
     row = dict(subject=subject, electrode=electrode, roi=roi, effect=effect,
                cluster_idx=0 if extent else -1, sign=sign,
                extent_windows=extent, cluster_onset=0.1, cluster_offset=0.3,
@@ -29,6 +30,8 @@ def _summary_rows(subject, electrode, roi, effect, p, extent=0, sign=0,
     if best_p is not None:
         row.update(best_cluster_p=best_p, best_cluster_extent=extent,
                    best_cluster_sign=sign)
+    if sig_after_fdr is not None:
+        row.update(cluster_p_fdr=p, sig_after_fdr=bool(sig_after_fdr))
     return row
 
 
@@ -162,6 +165,107 @@ def test_none_mode_flags_any_surviving_cluster(four_runs):
     lab = ptc.electrode_labels(four_runs, roi='lpfc', correction='none',
                                use_npz=False)
     assert lab['CPC'].sum() == 5
+
+
+def _run_with_own_verdicts(tmp_path, name, effect, entries, roi='lpfc'):
+    """entries: (subject, electrode, p, extent, sign, sig_after_fdr)."""
+    run_dir = tmp_path / name
+    run_dir.mkdir(parents=True, exist_ok=True)
+    rows = [_summary_rows(s, e, roi, effect, p, ext, sg, sig_after_fdr=sig)
+            for s, e, p, ext, sg, sig in entries]
+    pd.DataFrame(rows).to_csv(run_dir / 'summary.csv', index=False)
+    return run_dir
+
+
+@pytest.fixture
+def runs_with_own_verdicts(tmp_path):
+    """Two runs whose stored verdicts DISAGREE with raw thresholding.
+
+    e0/e1 have p < .05 but did not survive the run's BH; e3 has a middling p the
+    run nonetheless accepted. Any mode that silently re-derives labels instead of
+    adopting the run's verdict will therefore give a different count.
+    """
+    elecs = [('S1', 'e0'), ('S1', 'e1'), ('S1', 'e2'), ('S2', 'e3'), ('S2', 'e4')]
+    #        p,    extent, sign, run's own sig_after_fdr
+    spec = [(0.002, 5, 1, False),     # raw-significant, run said no
+            (0.010, 4, 1, False),     # raw-significant, run said no
+            (0.001, 6, 1, True),      # both agree yes
+            (0.200, 3, 1, True),      # raw-nonsignificant, run said yes
+            (1.000, 0, 0, False)]     # both agree no
+    entries = [(s, e, *spec[i]) for i, (s, e) in enumerate(elecs)]
+    return {
+        'CPC': _run_with_own_verdicts(tmp_path, 'lwpc', CPC_EFFECT, entries),
+        'SPS': _run_with_own_verdicts(tmp_path, 'lwps', SPS_EFFECT, entries),
+    }
+
+
+def test_run_fdr_adopts_the_runs_verdict_not_a_rederived_one(runs_with_own_verdicts):
+    adopted = ptc.electrode_labels(runs_with_own_verdicts, roi='lpfc',
+                                   correction='run_fdr', use_npz=False)
+    rederived = ptc.electrode_labels(runs_with_own_verdicts, roi='lpfc',
+                                     alpha=0.05, correction='cluster',
+                                     use_npz=False)
+    assert adopted['CPC'].sum() == 2            # e2, e3 -- what the run said
+    assert rederived['CPC'].sum() == 3          # e0, e1, e2 -- raw p < .05
+    # The denominator is unaffected: every TESTED electrode is still present.
+    assert len(adopted) == len(rederived) == 5
+
+
+def test_run_fdr_matches_load_significant_electrodes(runs_with_own_verdicts):
+    """The whole point of the mode: the same set the run reports elsewhere."""
+    from src.analysis.power.windowed_anova import load_significant_electrodes
+
+    lab = ptc.electrode_labels(runs_with_own_verdicts, roi='lpfc',
+                               correction='run_fdr', use_npz=False)
+    theirs = set(load_significant_electrodes(
+        runs_with_own_verdicts['CPC'], roi='lpfc', effect=CPC_EFFECT,
+        use_fdr=True))
+    ours = set(map(tuple, lab.loc[lab['CPC'] == 1, ['subject', 'electrode']]
+                            .itertuples(index=False, name=None)))
+    assert ours == theirs
+
+
+def test_run_cluster_adopts_surviving_cluster_verdict(runs_with_own_verdicts):
+    lab = ptc.electrode_labels(runs_with_own_verdicts, roi='lpfc',
+                               correction='run_cluster', use_npz=False)
+    assert lab['CPC'].sum() == 4                # everything with extent > 0
+
+
+def test_run_modes_ignore_alpha(runs_with_own_verdicts):
+    at_05 = ptc.electrode_labels(runs_with_own_verdicts, roi='lpfc', alpha=0.05,
+                                 correction='run_fdr', use_npz=False)
+    at_001 = ptc.electrode_labels(runs_with_own_verdicts, roi='lpfc', alpha=0.001,
+                                  correction='run_fdr', use_npz=False)
+    assert at_05['CPC'].tolist() == at_001['CPC'].tolist()
+    assert at_05.attrs['alpha_applies'] is False
+    assert at_05['q_cpc'].isna().all()          # nothing was corrected here
+
+
+def test_run_fdr_on_a_run_without_the_column_raises(four_runs):
+    with pytest.raises(ValueError, match='no sig_after_fdr column'):
+        ptc.electrode_labels(four_runs, roi='lpfc', correction='run_fdr',
+                             use_npz=False)
+
+
+def test_run_verdict_is_ored_over_an_electrodes_clusters(tmp_path):
+    """A multi-cluster electrode has one row per cluster; the verdict is the
+    electrode's, so a single accepted cluster must flag it."""
+    rows = [
+        _summary_rows('S1', 'e0', 'lpfc', CPC_EFFECT, 0.4, 2, 1, sig_after_fdr=False),
+        _summary_rows('S1', 'e0', 'lpfc', CPC_EFFECT, 0.01, 7, 1, sig_after_fdr=True),
+        _summary_rows('S1', 'e1', 'lpfc', CPC_EFFECT, 1.0, 0, 0, sig_after_fdr=False),
+    ]
+    run = tmp_path / 'multi'
+    run.mkdir()
+    pd.DataFrame(rows).to_csv(run / 'summary.csv', index=False)
+    sps = _run_with_own_verdicts(
+        tmp_path, 'sps', SPS_EFFECT,
+        [('S1', 'e0', 1.0, 0, 0, False), ('S1', 'e1', 1.0, 0, 0, False)])
+
+    lab = ptc.electrode_labels({'CPC': run, 'SPS': sps}, roi='lpfc',
+                               correction='run_fdr', use_npz=False)
+    assert len(lab) == 2                        # collapsed to one row per electrode
+    assert lab.loc[lab.electrode == 'e0', 'CPC'].item() == 1
 
 
 def test_fdr_is_never_more_liberal_than_raw(four_runs):

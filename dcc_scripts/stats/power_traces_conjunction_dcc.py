@@ -62,6 +62,8 @@ import matplotlib
 matplotlib.use('Agg')          # headless / cluster
 import matplotlib.pyplot as plt
 
+from statsmodels.stats.multitest import multipletests
+
 from src.analysis.stats import power_traces_conjunction as ptc
 # NOTE: `general_utils` (and through it `mne`) is imported lazily inside
 # `run_continuous_control`. The count test is a pure read of a finished run, so
@@ -180,7 +182,19 @@ def make_synthetic_runs(save_dir, n_subj=8, n_elec=25, overlap=0.6, base_rate=0.
     for g, rs in rows.items():
         run_dir = os.path.join(save_dir, 'synthetic_runs', g.lower())
         os.makedirs(run_dir, exist_ok=True)
-        pd.DataFrame(rs).to_csv(os.path.join(run_dir, 'summary.csv'), index=False)
+        df = pd.DataFrame(rs)
+        # Mirror step 6 of run_within_electrode_windowed_anova_cluster_correction:
+        # BH over cluster_p_value within (roi, effect). Without this the fabricated
+        # runs carry no `sig_after_fdr`, and CORRECTION=run_fdr -- the mode that
+        # adopts exactly this column -- could not be dry-run against them.
+        df['cluster_p_fdr'] = np.nan
+        df['sig_after_fdr'] = False
+        for _, idx in df.groupby(['roi', 'effect']).groups.items():
+            p = df.loc[idx, 'cluster_p_value'].fillna(1.0).to_numpy()
+            reject, p_adj, _, _ = multipletests(p, alpha=0.05, method='fdr_bh')
+            df.loc[idx, 'cluster_p_fdr'] = p_adj
+            df.loc[idx, 'sig_after_fdr'] = reject
+        df.to_csv(os.path.join(run_dir, 'summary.csv'), index=False)
         with open(os.path.join(run_dir, 'run_config.json'), 'w') as f:
             json.dump(dict(window_centers=[float(c) for c in centers],
                            window_size=50, step_size=10, sampling_rate=256.0,
@@ -436,6 +450,15 @@ def write_summary(labels, res, save_dir, meta, control=None, alpha=0.05):
     for key, val in meta.items():
         lines.append(f"{key:>26}: {val}")
     lines += ["-" * 72, ptc.summarize(res)]
+    if not labels.attrs.get('alpha_applies', True):
+        lines.append(
+            f"  NOTE: correction={labels.attrs.get('correction')!r} adopts the "
+            "power-traces run's own significance verdict verbatim, so nothing "
+            f"was corrected or thresholded here and alpha={alpha} is INERT. The "
+            "run's BH family is its own (all electrodes in that roi/effect, one "
+            "row per surviving cluster, hardcoded alpha=0.05) -- it is not this "
+            "analysis's post-alignment denominator. Use correction='fdr_bh' to "
+            "correct over the electrodes the 2x2 is actually built on.")
     if 'sweep' in res and len(res['sweep']):
         lines += _sweep_warning(res['sweep'])
     if labels.attrs.get('n_dropped'):

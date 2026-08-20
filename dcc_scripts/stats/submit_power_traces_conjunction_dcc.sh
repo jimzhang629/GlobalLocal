@@ -43,7 +43,13 @@ PT_RUN="${PT_RUN:-$FIGS_ROOT/$EPOCHS_ROOT_FILE/anova_within_electrode/stimulus_e
 # Label / conjunction knobs.
 # ---------------------------------------------------------------------------
 ROIS=${ROIS:-lpfc}                 # comma-separated, or 'all' to pool over ROIs
-CORRECTION=${CORRECTION:-cluster}   # fdr_bh | cluster | none
+# Derive labels here from the stored cluster p:  fdr_bh | cluster | none
+# Or adopt the power_traces run's own verdict:   run_fdr | run_cluster
+#   run_fdr     = the run's sig_after_fdr, i.e. the same electrodes
+#                 load_significant_electrodes(use_fdr=True) returns
+#   run_cluster = electrodes with any cluster past the run's extent threshold
+# The run_* modes re-correct nothing, so ALPHA does not apply to them.
+CORRECTION=${CORRECTION:-cluster}
 EFFECT_MODE=${EFFECT_MODE:-main} # interaction (LWPC/LWPS) | main (congruency/switchType)
 ALPHA=${ALPHA:-0.05}
 N_PERM_NULL=${N_PERM_NULL:-10000}

@@ -83,11 +83,19 @@ PT_RUN_DIRS = {k: v for k, v in PT_RUN_DIRS.items() if v}
 ROIS = os.environ.get('ROIS', 'lpfc')
 ROIS = 'all' if ROIS.strip() == 'all' else [r.strip() for r in ROIS.split(',') if r.strip()]
 
-# correction across ELECTRODES, which is the family a count test needs:
-#   'fdr_bh'  BH within (roi, effect)                     [default, recommended]
-#   'cluster' raw cluster p < alpha, no across-electrode correction -- the
-#             like-for-like port of what load_significant_electrodes does today
-#   'none'    any surviving cluster counts
+# How electrodes are selected. The first three DERIVE the labels here from the
+# per-electrode cluster p stored in summary.csv:
+#   'fdr_bh'  BH across electrodes within (roi, effect), over one row per
+#             electrode and over this analysis's denominator  [recommended]
+#   'cluster' cluster p < alpha, no across-electrode correction
+#   'none'    any supra-threshold cluster candidate counts (very liberal)
+# The last two ADOPT the run's own verdict verbatim -- nothing is corrected or
+# thresholded here, so ALPHA is ignored:
+#   'run_fdr'     the run's sig_after_fdr column; the same electrode set that
+#                 load_significant_electrodes(use_fdr=True) and
+#                 sig_electrodes_<effect>.json report
+#   'run_cluster' any cluster that cleared the run's extent threshold; the
+#                 load_significant_electrodes(use_fdr=False) set
 CORRECTION = os.environ.get('CORRECTION', 'fdr_bh')
 ALPHA = float(os.environ.get('ALPHA', '0.05'))
 # 'interaction': LWPC x LWPS; 'main': congruency x switch-type main effects.

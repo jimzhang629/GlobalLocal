@@ -37,16 +37,37 @@ effects: congruency (alias ``S``) and switchType (alias ``F``).  The historical
 conjunction stack can consume the labels unchanged; cross-control columns are
 not produced for main effects.
 
-Two correction modes, because they answer different questions
--------------------------------------------------------------
-`correction='cluster'` reproduces what `load_significant_electrodes` actually
-does today: keep any electrode with a surviving cluster at `alpha`, with no
-correction across electrodes. It is the like-for-like port of the existing lab
-convention.
+Selection modes: derive the labels here, or adopt the run's own
+---------------------------------------------------------------
+The run already reaches a verdict on every electrode and writes it to
+`sig_after_fdr` / `sig_electrodes_<effect>.json` / (legacy)
+`significant_effects_structure.json`. Two modes adopt that verdict unchanged:
 
-`correction='fdr_bh'` (default) additionally applies Benjamini-Hochberg **across
-electrodes, within (roi, effect)** -- the correction family the conjunction
-needs, since the 2x2 table is built by counting electrodes.
+`correction='run_fdr'`     the run's `sig_after_fdr` -- exactly the set
+                           `load_significant_electrodes(use_fdr=True)` returns.
+`correction='run_cluster'` any cluster that cleared the run's extent threshold
+                           -- the `use_fdr=False` / legacy-JSON set.
+
+Use these when the conjunction has to sit on precisely the electrodes reported
+elsewhere from that run. Nothing is thresholded here, so `alpha` is inert.
+
+The other three derive labels from the per-electrode cluster p the run stored:
+
+`correction='cluster'` keeps any electrode whose cluster p < `alpha`, with no
+correction across electrodes.
+
+`correction='fdr_bh'` (default) applies Benjamini-Hochberg **across electrodes,
+within (roi, effect)** -- the correction family the conjunction needs, since the
+2x2 table is built by counting electrodes.
+
+Note that `fdr_bh` here is NOT a duplicate of the run's own BH pass, and the two
+disagree on purpose. The run corrects `cluster_p_value` over every row in a
+(roi, effect) group -- one row per surviving cluster, so a multi-cluster
+electrode is counted several times -- at a hardcoded alpha, over the whole run.
+This module corrects `best_cluster_p` over one row per electrode, after the ROI
+filter and the `require_all` alignment, i.e. over the exact denominator the 2x2
+is built on. Prefer `fdr_bh` for the count test itself; prefer `run_fdr` when
+consistency with the run's other outputs matters more.
 
 A caveat that matters for `fdr_bh`: `summary.csv` only records cluster p-values
 for clusters that ALREADY passed the run's cluster-extent threshold; every other
@@ -109,6 +130,14 @@ MAIN_EFFECTS = {
 # are carried for reporting/specificity and for the decoding double-dip
 # bookkeeping, but they are not part of the S x F table.
 CONSTRUCT_GROUPS = ('CPC', 'SPS')
+
+# Selection modes. The first three re-threshold the per-electrode cluster p that
+# the run stored; the last two adopt the run's own verdict verbatim.
+CORRECTIONS = ('fdr_bh', 'cluster', 'none', 'run_fdr', 'run_cluster')
+
+# Modes that read a boolean the run already wrote, rather than deriving one.
+# `alpha` does not apply to them -- the run fixed its own cutoffs at run time.
+RUN_CORRECTIONS = {'run_fdr': 'run_sig_fdr', 'run_cluster': 'run_sig_cluster'}
 
 
 def anova_effect_name(cond_factor, mod_factor):
@@ -175,6 +204,12 @@ def _best_cluster_per_electrode(summary, effect_names, roi=None):
     graded p for those, minus the sign-split. Returns columns
     `subject, electrode, roi, p_cluster, sign, extent, peak_F`.
 
+    Also carries the run's OWN significance verdicts, so a caller can adopt them
+    instead of re-thresholding: `run_sig_fdr` from the `sig_after_fdr` column the
+    run wrote with its BH pass across electrodes, and `run_sig_cluster` from
+    whether any cluster cleared the run's extent threshold (`cluster_idx >= 0`).
+    Both are OR-ed over an electrode's rows before the collapse to one row.
+
     `effect_names` is the tuple of acceptable spellings (factor order can differ
     between runs); the first one present in the run is used.
     """
@@ -193,11 +228,26 @@ def _best_cluster_per_electrode(summary, effect_names, roi=None):
 
     if 'extent_windows' not in df.columns:
         df['extent_windows'] = 0
+
+    # The run's own verdicts, OR-ed over an electrode's rows. Done BEFORE the
+    # collapse: an electrode contributes one row per surviving cluster, and the
+    # verdict belongs to the electrode, not to whichever row sorts first.
+    keys = ['subject', 'electrode', 'roi']
+    verdicts = {}
+    if 'sig_after_fdr' in df.columns:
+        verdicts['run_sig_fdr'] = df['sig_after_fdr'].fillna(False).astype(bool)
+    if 'cluster_idx' in df.columns:
+        verdicts['run_sig_cluster'] = df['cluster_idx'].fillna(-1) >= 0
+    run_sig = (df[keys].assign(**verdicts).groupby(keys, as_index=False).any()
+               if verdicts else None)
+
     df = df.sort_values(['cluster_p_value', 'extent_windows'],
                         ascending=[True, False])
     best = df.groupby(['subject', 'electrode', 'roi'], as_index=False).first()
 
     out = best[['subject', 'electrode', 'roi']].copy()
+    if run_sig is not None:
+        out = out.merge(run_sig, on=keys, how='left', validate='one_to_one')
     if 'best_cluster_p' in best.columns and best['best_cluster_p'].notna().any():
         out['p_cluster'] = best['best_cluster_p'].to_numpy()
         out['sign'] = best['best_cluster_sign'].to_numpy()
@@ -238,11 +288,19 @@ def label_funnel(per_group, final_labels, alpha=0.05, correction=None):
                      if group in final_labels.columns else np.nan)
         final_q = (f'q_{g}' if f'q_{g}' in final_labels.columns
                    and final_labels[f'q_{g}'].notna().any() else None)
+        # What the run itself called significant, for comparison against what
+        # this module derives. Present whenever the run wrote the columns.
+        run_sig = {
+            f'run_own_{name}': int(tbl[col].fillna(False).sum())
+            for name, col in (('sig_after_fdr', 'run_sig_fdr'),
+                              ('sig_cluster', 'run_sig_cluster'))
+            if col in tbl.columns}
         rows.append(dict(
             group=group,
             run_tested_electrodes=tested,
             run_raw_p_lt_alpha=raw,
             run_raw_p_lt_alpha_frac=(raw / tested if tested else np.nan),
+            **run_sig,
             present_after_alignment=in_final,
             dropped_by_alignment=tested - in_final,
             aligned_raw_p_lt_alpha=aligned_raw,
@@ -372,14 +430,42 @@ def electrode_labels(runs, roi=None, alpha=0.05, correction='fdr_bh',
         contributes no information to it.
     alpha : float
         Selection cutoff, applied to `q_<group>` under `fdr_bh` or to the raw
-        cluster p under `cluster`.
-    correction : {'fdr_bh', 'cluster', 'none'}
-        `fdr_bh`  -- BH across electrodes within (roi, effect). The right family
-                     for a test that counts electrodes.
-        `cluster` -- raw cluster p < alpha, no across-electrode correction. This
-                     is what `load_significant_electrodes` does today; use it for
-                     a like-for-like comparison against existing lab numbers.
-        `none`    -- flag every electrode that had any surviving cluster.
+        cluster p under `cluster`. IGNORED by the `run_*` modes, which adopt a
+        verdict the run already reached under its own cutoffs; `.attrs`
+        reports this as `alpha_applies`.
+    correction : {'fdr_bh', 'cluster', 'none', 'run_fdr', 'run_cluster'}
+        The first three DERIVE labels here from the per-electrode cluster p the
+        run stored:
+
+        `fdr_bh`  -- BH across electrodes within (roi, effect), over one row per
+                     electrode, after the ROI filter and the `require_all`
+                     alignment. That is the family a test that COUNTS electrodes
+                     needs, and it is not the same family the run corrected over.
+        `cluster` -- cluster p < alpha, no across-electrode correction.
+        `none`    -- flag every electrode with any supra-threshold cluster
+                     candidate, surviving or not. Very liberal; a sanity mode.
+
+        The last two ADOPT the run's own verdict verbatim, with no thresholding
+        or correction performed here:
+
+        `run_fdr`     -- the run's `sig_after_fdr` column, i.e. its BH pass over
+                         `cluster_p_value` within (roi, effect). This is the set
+                         `load_significant_electrodes(use_fdr=True)` returns and
+                         the set written to `sig_electrodes_<effect>.json`.
+        `run_cluster` -- any cluster that cleared the run's extent threshold
+                         (`cluster_idx >= 0`), matching
+                         `significant_effects_structure.json` and
+                         `load_significant_electrodes(use_fdr=False)`.
+
+        Use the `run_*` modes when the conjunction must be built on exactly the
+        electrodes the power-traces run reports elsewhere. The cost is that the
+        run's BH family is its own -- all electrodes in that (roi, effect), one
+        row per surviving cluster, at a hardcoded alpha=0.05 -- so it is neither
+        restricted to this analysis's ROI subset nor to the post-`require_all`
+        denominator, and electrodes with several clusters count several times in
+        it. The electrode UNIVERSE (the 2x2 denominator) still comes from
+        `summary.csv` and still respects `roi` and `require_all`; only the
+        numerator is inherited.
     use_npz : bool
         Only consulted for LEGACY runs whose `summary.csv` predates the
         `best_cluster_p` column. Current runs record a graded cluster p for every
@@ -404,8 +490,8 @@ def electrode_labels(runs, roi=None, alpha=0.05, correction='fdr_bh',
     Aliases `S` = `CPC` and `F` = `SPS` are added for the conjunction stack.
     `.attrs` carries `n_dropped`, `correction`, `alpha`, `roi`, `source`.
     """
-    if correction not in ('fdr_bh', 'cluster', 'none'):
-        raise ValueError("correction must be 'fdr_bh', 'cluster' or 'none'; "
+    if correction not in CORRECTIONS:
+        raise ValueError(f"correction must be one of {CORRECTIONS}; "
                          f"got {correction!r}")
     if effect_mode not in ('interaction', 'main'):
         raise ValueError("effect_mode must be 'interaction' or 'main'; "
@@ -443,14 +529,26 @@ def electrode_labels(runs, roi=None, alpha=0.05, correction='fdr_bh',
 
         # Preference order: the graded p the run recorded for every electrode;
         # else a recompute from the saved null; else the surviving-cluster p.
+        # The run_* modes always take the summary path -- the run's verdicts live
+        # in summary.csv and the .npz carries no notion of what the run decided.
         summary = load_run_summary(run_dir)
-        if 'best_cluster_p' in summary.columns:
+        if correction in RUN_CORRECTIONS or 'best_cluster_p' in summary.columns:
             tbl = _best_cluster_per_electrode(summary, names, roi=roi)
         else:
             tbl = (refine_cluster_pvalues_from_npz(run_dir, names, roi=roi)
                    if use_npz else pd.DataFrame())
             if tbl.empty:
                 tbl = _best_cluster_per_electrode(summary, names, roi=roi)
+
+        if correction in RUN_CORRECTIONS:
+            col = RUN_CORRECTIONS[correction]
+            if col not in tbl.columns:
+                raise ValueError(
+                    f"correction={correction!r} needs the run's own verdict, but "
+                    f"{Path(run_dir) / 'summary.csv'} has no "
+                    f"{'sig_after_fdr' if correction == 'run_fdr' else 'cluster_idx'} "
+                    "column (run predates it). Use correction='fdr_bh' or "
+                    "'cluster' to derive the labels here instead.")
         per_group[group] = tbl.set_index(['subject', 'electrode', 'roi'])
 
     # Align on a single electrode universe across the four runs.
@@ -469,6 +567,9 @@ def electrode_labels(runs, roi=None, alpha=0.05, correction='fdr_bh',
         out[f'p_{g}'] = aligned['p_cluster'].to_numpy()
         out[f'{g}_sign'] = aligned['sign'].to_numpy()
         out[f'{g}_extent'] = aligned['extent'].to_numpy()
+        if correction in RUN_CORRECTIONS:
+            out[f'{g}_run_sig'] = (aligned[RUN_CORRECTIONS[correction]]
+                                   .fillna(False).to_numpy().astype(bool))
 
     for group in per_group:
         g = group.lower()
@@ -479,6 +580,11 @@ def electrode_labels(runs, roi=None, alpha=0.05, correction='fdr_bh',
         elif correction == 'cluster':
             out[f'q_{g}'] = np.nan          # no across-electrode correction applied
             flag = p < alpha
+        elif correction in RUN_CORRECTIONS:
+            # The run already decided. Nothing is corrected or thresholded here,
+            # so `alpha` is inert -- see the note in `.attrs['alpha_applies']`.
+            out[f'q_{g}'] = np.nan
+            flag = out[f'{g}_run_sig'].to_numpy()
         else:
             out[f'q_{g}'] = np.nan
             flag = pd.Series(out[f'{g}_extent']).fillna(0).to_numpy() > 0
@@ -490,6 +596,7 @@ def electrode_labels(runs, roi=None, alpha=0.05, correction='fdr_bh',
     out.attrs.update(n_dropped=int(n_union - len(out)), correction=correction,
                      alpha=alpha, roi=roi, source='power_traces',
                      effect_mode=effect_mode,
+                     alpha_applies=correction not in RUN_CORRECTIONS,
                      label_funnel=funnel.to_dict(orient='records'))
     return out
 
