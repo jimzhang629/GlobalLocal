@@ -52,7 +52,8 @@ def plot_power_trace_for_roi(evks_dict, roi, condition_names, conditions_save_na
                              plotting_parameters, significant_clusters=None,
                              window_size=None, sampling_rate=None, save_dir=None,
                              show_std=True, show_sem=False, show_ci=False, ci=0.95,
-                             plot_style=None, save_name_suffix=None):
+                             plot_style=None, save_name_suffix=None,
+                             show_individual_electrodes=False):
     """
     Custom plot with standard deviation or standard error shading.
 
@@ -84,6 +85,12 @@ def plot_power_trace_for_roi(evks_dict, roi, condition_names, conditions_save_na
     significant_clusters : array-like of bool
         A boolean array indicating which time windows are part of a
         statistically significant cluster. Shape: (n_windows,).
+    show_individual_electrodes : bool
+        Draw every contributing electrode as a thin grey line behind the
+        condition means. The ROI mean is an unweighted average, so one artifact
+        contact can move it and inflate the error ribbon; this makes that
+        visible in the same figure. See src/analysis/power/electrode_qc.py to
+        rank the offenders numerically.
     Returns:
     --------
     fig : matplotlib figure
@@ -135,9 +142,15 @@ def plot_power_trace_for_roi(evks_dict, roi, condition_names, conditions_save_na
         # Calculate mean across channels
         mean_data = np.mean(data, axis=0)
 
+        # Individual electrodes go down first so the means stay readable on top.
+        if show_individual_electrodes:
+            for electrode_trace in data:
+                ax.plot(times, electrode_trace, color=color, linewidth=0.5,
+                        alpha=0.25, zorder=1)
+
         # Plot mean
         ax.plot(times, mean_data, color=color, linestyle=linestyle,
-                linewidth=2.5, label=label)
+                linewidth=2.5, label=label, zorder=3)
 
         # Add shading
         if show_std:
@@ -260,7 +273,10 @@ def plot_power_trace_for_roi(evks_dict, roi, condition_names, conditions_save_na
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
         error_type = 'std' if show_std else 'sem' if show_sem else 'ci' if show_ci else 'no_error'
-        base = f'{roi}_{conditions_save_name}_{save_name_suffix}_{error_type}_shading'
+        # Keep the overlay in its own file so it never overwrites the clean one.
+        overlay = '_with_electrodes' if show_individual_electrodes else ''
+        base = (f'{roi}_{conditions_save_name}_{save_name_suffix}_'
+                f'{error_type}_shading{overlay}')
         for ext in ('.pdf', '.png'):
             filepath = os.path.join(save_dir, base + ext)
             plt.savefig(filepath, dpi=300, bbox_inches='tight')
@@ -272,7 +288,8 @@ def plot_power_trace_for_roi(evks_dict, roi, condition_names, conditions_save_na
 def plot_power_traces_for_all_rois(evks_dict_elecs, rois, condition_names, conditions_save_name,
                                    plotting_parameters, window_size=None, sampling_rate=None,
                                    significant_clusters=None, save_dir=None, error_type='std',
-                                   plot_style=None, save_name_suffix=None):
+                                   plot_style=None, save_name_suffix=None,
+                                   show_individual_electrodes=False):
     """
     Plot power traces for each ROI comparing the specified conditions
 
@@ -299,6 +316,9 @@ def plot_power_traces_for_all_rois(evks_dict_elecs, rois, condition_names, condi
     significant_clusters : array-like of bool
         A boolean array indicating which time windows are part of a
         statistically significant cluster. Shape: (n_windows,).
+    show_individual_electrodes : bool
+        Draw each electrode as a thin line behind the condition means, saved to
+        a '..._with_electrodes' file so the clean version is preserved.
     """
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
@@ -317,7 +337,8 @@ def plot_power_traces_for_all_rois(evks_dict_elecs, rois, condition_names, condi
             show_std=(error_type == 'std'),
             show_sem=(error_type == 'sem'),
             show_ci=(error_type == 'ci'),
-            plot_style=plot_style, save_name_suffix=save_name_suffix
+            plot_style=plot_style, save_name_suffix=save_name_suffix,
+            show_individual_electrodes=show_individual_electrodes,
         )
 
     if save_dir:
