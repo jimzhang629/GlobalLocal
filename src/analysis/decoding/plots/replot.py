@@ -13,6 +13,13 @@ Typical use, from a notebook::
     runs[runs.condition_label.str.contains('lwpc')]
 
     replot_all(runs, save_dir=CLEAN_FIGS)          # re-draw the lot
+
+Nothing here is specific to one analysis: every condition set the registry
+gives a ``context_comparison`` re-plots the same way. So a sweep that comes
+back with only LWPC figures is telling you the *other analyses have no runs on
+disk*, not that they cannot be drawn -- run :func:`analysis_coverage` on the
+index to see which analysis x electrode-set cells are empty before concluding
+anything from the figures that did appear.
 """
 
 import os
@@ -25,6 +32,7 @@ import numpy as np
 import pandas as pd
 
 from src.analysis.config.condition_registry import (
+    get_condition_labels,
     get_context_comparison_kwargs,
     get_display_name,
     get_trace_labels,
@@ -35,6 +43,8 @@ from src.analysis.decoding.anova_electrode_selection import (
 from .accuracies import plot_accuracies_with_multiple_sig_clusters
 
 __all__ = [
+    'BLOCK_BALANCED_ANALYSES',
+    'analysis_coverage',
     'describe_run',
     'find_master_results',
     'find_run_for_figure',
@@ -43,6 +53,17 @@ __all__ = [
     'replot_all',
 ]
 
+# The four block-balanced decoding analyses the paper figures are built from:
+# the two list-wide proportion effects and the two cross-proportion controls.
+# They are the default expectation for :func:`analysis_coverage`, so a sweep
+# missing three of the four says so instead of quietly re-plotting one.
+BLOCK_BALANCED_ANALYSES = (
+    'stimulus_lwpc_block_balanced_conditions',
+    'stimulus_lwps_block_balanced_conditions',
+    'stimulus_congruency_by_switch_prop_block_balanced_conditions',
+    'stimulus_switch_type_by_inc_prop_block_balanced_conditions',
+)
+
 # 20260814_000636_MASTER_RESULTS_job52094028_<condition>_24_subs_<elecs>_LDA_...
 _FILENAME_RE = re.compile(
     r'^(?P<timestamp>\d{8}_\d{6})_MASTER_RESULTS_(?P<params>.*)\.pkl$'
@@ -50,6 +71,10 @@ _FILENAME_RE = re.compile(
 
 # Keys of master_results['stats'] that are not comparisons.
 _NON_COMPARISON_STATS_KEYS = {'pooled_shuffles'}
+
+# Stand-in electrode-set name for runs that recorded none, so they still get a
+# row in the coverage table instead of vanishing from it.
+_NO_ELECTRODE_SET = '(no electrode set label)'
 
 
 def find_master_results(root, pattern='**/*MASTER_RESULTS*.pkl', load_metadata=True):
@@ -125,6 +150,116 @@ def load_master_results(path):
     """Unpickle one MASTER_RESULTS file."""
     with open(path, 'rb') as handle:
         return pickle.load(handle)
+
+
+def analysis_coverage(runs, analyses=BLOCK_BALANCED_ANALYSES,
+                      electrode_sets=None, verbose=True):
+    """Which analysis x electrode-set cells have runs on disk, and which do not.
+
+    Re-plotting can only draw what a decoding job saved. When a sweep comes
+    back with LWPC figures and nothing else, the question is not "why does
+    re-plotting skip the other analyses" -- it does not -- but "which jobs
+    never wrote a MASTER_RESULTS pickle". This answers that directly: one row
+    per (analysis, electrode set), with ``n_runs = 0`` for the cells that are
+    empty.
+
+    An empty cell means the decoding job for that analysis and electrode set
+    has to be re-run; there is nothing to re-plot from. A condition name that
+    has drifted out of the registry is the usual cause -- the job dies at
+    ``get_conditions_obj`` before it writes anything.
+
+    Parameters
+    ----------
+    runs : pandas.DataFrame
+        Output of :func:`find_master_results`.
+    analyses : sequence of str, optional
+        Condition labels that are expected to be present. Defaults to
+        :data:`BLOCK_BALANCED_ANALYSES`. Pass
+        ``get_condition_labels(with_context_comparison=True)`` for every
+        analysis the registry can draw a comparison panel for, or an explicit
+        list for a subset.
+    electrode_sets : sequence of str, optional
+        Electrode-set labels to expect for every analysis. Defaults to every
+        electrode set that appears anywhere in ``runs`` -- so an electrode set
+        used by one analysis and not the others shows up as a gap.
+    verbose : bool
+        Print a summary of the missing cells.
+
+    Returns
+    -------
+    pandas.DataFrame
+        ``condition_label``, ``electrode_set_label``, ``n_runs``,
+        ``in_registry`` (whether the analysis is one the registry can draw a
+        comparison panel for), sorted with the empty cells first.
+    """
+    if not isinstance(runs, pd.DataFrame):
+        runs = find_master_results(runs) if isinstance(runs, str) else pd.DataFrame(runs)
+
+    good = runs[runs['error'] == ''] if 'error' in runs else runs
+    if len(good):
+        # A run whose electrode set went unrecorded still has to be counted
+        # somewhere, or it reads as a missing cell it is not.
+        good = good.assign(electrode_set_label=good['electrode_set_label']
+                           .fillna('').replace('', _NO_ELECTRODE_SET))
+    on_disk = sorted({c for c in good['condition_label'].unique() if c}) if len(good) else []
+    counts = (good.groupby(['condition_label', 'electrode_set_label']).size()
+              if len(good) else pd.Series(dtype=int))
+
+    analyses = list(analyses) if analyses is not None else list(on_disk)
+    # An analysis on disk that was not asked about is still worth a row:
+    # dropping it would hide exactly the runs whose condition label has drifted.
+    analyses += [a for a in on_disk if a not in analyses]
+
+    if electrode_sets is None:
+        electrode_sets = sorted({e for e in good['electrode_set_label'].unique() if e}) \
+            if len(good) else []
+    electrode_sets = list(electrode_sets)
+    if analyses and not electrode_sets:
+        # Nothing on disk records an electrode set (or none was passed in).
+        # Still report per analysis rather than returning an empty frame.
+        electrode_sets = [_NO_ELECTRODE_SET]
+
+    plottable = set(get_condition_labels(with_context_comparison=True))
+    rows = [{
+        'condition_label': analysis,
+        'electrode_set_label': elecs,
+        'n_runs': int(counts.get((analysis, elecs), 0)) if len(counts) else 0,
+        'in_registry': analysis in plottable,
+    } for analysis in analyses for elecs in electrode_sets]
+
+    coverage = pd.DataFrame(rows, columns=[
+        'condition_label', 'electrode_set_label', 'n_runs', 'in_registry'])
+    if len(coverage):
+        coverage = coverage.sort_values(
+            ['n_runs', 'condition_label', 'electrode_set_label']
+        ).reset_index(drop=True)
+
+    if verbose:
+        _print_coverage(coverage, electrode_sets)
+    return coverage
+
+
+def _print_coverage(coverage, electrode_sets):
+    if not len(coverage):
+        print('No runs on disk, so nothing to report coverage for.')
+        return
+
+    missing = coverage[coverage['n_runs'] == 0]
+    print(f'{len(coverage) - len(missing)}/{len(coverage)} analysis x '
+          f'electrode-set cells have at least one run '
+          f'({len(electrode_sets)} electrode sets).')
+    if not len(missing):
+        print('Every expected analysis is on disk.')
+        return
+
+    print(f'\n{len(missing)} cells have NO saved run -- re-plotting cannot draw '
+          'these, the decoding jobs have to be re-run:')
+    for analysis, group in missing.groupby('condition_label', sort=True):
+        note = '' if group['in_registry'].all() else \
+            '   [!] not a CONDITION_REGISTRY key with a context comparison'
+        print(f'  {analysis}{note}')
+        for elecs in group['electrode_set_label']:
+            print(f'      · {elecs}')
 
 
 # Parameters worth seeing first when asking "what produced this figure?".
@@ -355,6 +490,13 @@ def replot_master_results(
     # The registry already names the y-axis per analysis; only analyses with
     # no context comparison fall back to the generic label.
     ylabel = context.get('ylabel', 'Decoding accuracy')
+    if not context:
+        # Every analysis with a 'context_comparison' entry gets a comparison
+        # panel; one without gets only the true-vs-shuffle panels. Say which
+        # this is, so a thin output tree is not mistaken for a re-plot bug.
+        print(f"  · {condition_label or '(no condition_label)'}: no "
+              "'context_comparison' in CONDITION_REGISTRY, so no comparison "
+              'panel -- true-vs-shuffle panels only')
 
     written = []
     for roi in rois:
@@ -379,7 +521,14 @@ def _replot_context_comparison(master, context, roi, unit, time_points,
     comp1 = context['condition_comparison_1']
     comp2 = context['condition_comparison_2']
     stats = master.get('stats', {})
-    if roi not in stats.get(comp1, {}) or roi not in stats.get(comp2, {}):
+    absent = [c for c in (comp1, comp2) if roi not in stats.get(c, {})]
+    if absent:
+        # The comparison panel needs both sides. Saying which one is missing
+        # separates "this run decoded a different pair" from "this ROI had no
+        # electrodes", which otherwise both look like a silently thinner tree.
+        print(f'  · {roi}: no comparison panel, '
+              f"{' and '.join(absent)} absent from stats for this ROI "
+              f"(stats has: {sorted(_comparison_keys(master)) or 'nothing'})")
         return []
 
     colors = context['colors']
@@ -562,8 +711,10 @@ def replot_all(runs, save_dir, group_by=('condition_label', 'electrode_set_label
     Returns
     -------
     pandas.DataFrame
-        One row per run: ``path``, ``n_figures``, ``error``. Check that
-        ``error`` is empty everywhere before believing the output is complete.
+        One row per run: ``path``, ``condition_label``, ``n_figures``,
+        ``error``. Check that ``error`` is empty everywhere before believing
+        the output is complete, and read the per-analysis tally printed at the
+        end: an analysis absent from it had no run in ``runs`` to re-plot.
     """
     if isinstance(runs, pd.DataFrame):
         records = runs.to_dict('records')
@@ -586,21 +737,51 @@ def replot_all(runs, save_dir, group_by=('condition_label', 'electrode_set_label
             run_dir = os.path.join(save_dir, *parts) if parts else save_dir
 
             written = replot_master_results(master, run_dir, **replot_kwargs)
-            results.append({'path': path, 'out_dir': run_dir,
+            results.append({'path': path,
+                            'condition_label': (record.get('condition_label')
+                                                or args.get('condition_label') or ''),
+                            'out_dir': run_dir,
                             'n_figures': len(written), 'error': ''})
             print(f'    → {len(written)} figures in {run_dir}')
         except Exception as exc:
             traceback.print_exc()
-            results.append({'path': path, 'out_dir': '', 'n_figures': 0,
+            results.append({'path': path,
+                            'condition_label': record.get('condition_label') or '',
+                            'out_dir': '', 'n_figures': 0,
                             'error': f'{type(exc).__name__}: {exc}'})
 
     # Always give the caller the same columns, so indexing the result of an
     # empty sweep says "no rows" rather than raising KeyError on a bare frame.
-    frame = pd.DataFrame(results, columns=['path', 'out_dir', 'n_figures', 'error'])
+    frame = pd.DataFrame(results, columns=[
+        'path', 'condition_label', 'out_dir', 'n_figures', 'error'])
     if not len(frame):
         print('\nNothing to re-plot: no runs were passed in.')
         return frame
+    _print_analysis_tally(frame)
     failed = int((frame['error'] != '').sum())
     print(f'\n{len(frame) - failed}/{len(frame)} runs re-plotted'
           + (f', {failed} failed (see the error column)' if failed else ''))
     return frame
+
+
+def _print_analysis_tally(frame, expected=BLOCK_BALANCED_ANALYSES):
+    """Figures per analysis, and which expected analyses contributed none.
+
+    A sweep is only as complete as the pickles it was handed. Printing the
+    tally means "I re-plotted 40 figures" cannot hide the fact that all 40 were
+    the same analysis.
+    """
+    tally = (frame.groupby('condition_label')['n_figures'].sum()
+             if 'condition_label' in frame else pd.Series(dtype=int))
+    print('\nFigures per analysis:')
+    for label, n_figures in tally.sort_index().items():
+        print(f'  {label or "(no condition_label)"}: {n_figures}')
+
+    missing = [a for a in expected if int(tally.get(a, 0)) == 0]
+    if missing:
+        print('\nNo figures for these analyses -- there was no run for them in '
+              'the frame passed to replot_all. Either the filter excluded them '
+              'or the decoding jobs never wrote a MASTER_RESULTS pickle; '
+              'analysis_coverage(runs) tells you which:')
+        for label in missing:
+            print(f'  · {label}')

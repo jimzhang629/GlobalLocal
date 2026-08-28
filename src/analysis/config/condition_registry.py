@@ -1046,8 +1046,46 @@ CONDITION_REGISTRY = {
 # Helper functions for consumers
 # =============================================================================
 
+def _registry_entry(condition_name):
+    """The registry entry for ``condition_name``, or a useful error.
+
+    A launcher passes condition names in as strings, so a name that drifted out
+    of sync with this file (``..._by_switch_proportion_block_balanced_...``
+    when the key is ``..._by_switch_prop_block_balanced_...``) used to surface
+    as a bare ``KeyError`` from deep inside a SLURM job. The whole sweep for
+    that analysis then produced nothing, and the absence only showed up much
+    later as a missing row in the re-plot index. Name the near-misses here.
+    """
+    entry = CONDITION_REGISTRY.get(condition_name)
+    if entry is not None:
+        return entry
+
+    import difflib
+    close = difflib.get_close_matches(str(condition_name), CONDITION_REGISTRY, n=3)
+    hint = f" Did you mean: {', '.join(close)}?" if close else ''
+    raise KeyError(
+        f"{condition_name!r} is not a key in CONDITION_REGISTRY "
+        f"(src/analysis/config/condition_registry.py).{hint}"
+    )
+
+
+def get_condition_labels(with_context_comparison=False):
+    """Every condition label the registry knows.
+
+    Parameters
+    ----------
+    with_context_comparison : bool
+        Only the labels that define a ``context_comparison`` -- i.e. the
+        analyses that produce a two-condition comparison panel, which is what
+        the decoding figures and :mod:`src.analysis.decoding.plots.replot` are
+        built around.
+    """
+    return [label for label, entry in CONDITION_REGISTRY.items()
+            if not with_context_comparison or entry.get('context_comparison')]
+
+
 def get_comparisons(condition_name):
-    return CONDITION_REGISTRY[condition_name]['comparisons']
+    return _registry_entry(condition_name)['comparisons']
 
 def get_pooled_shuffle_settings(condition_name):
     entry = CONDITION_REGISTRY.get(condition_name, {})
@@ -1085,7 +1123,7 @@ def get_balance_strata(condition_name):
     return True if entry is None else entry.get('balance_strata', True)
 
 def get_conditions_obj(condition_name):
-    return CONDITION_REGISTRY[condition_name]['conditions_obj']
+    return _registry_entry(condition_name)['conditions_obj']
 
 def get_subtraction_pairs(condition_name):
     """

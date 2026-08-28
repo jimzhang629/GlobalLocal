@@ -8,6 +8,37 @@ CONDITIONS=(
     stimulus_switch_type_by_inc_prop_block_balanced_conditions
 )
 
+# Every name above has to be a key in src/analysis/config/condition_registry.py.
+# A name that has drifted out of sync (this list once held
+# ..._by_switch_proportion_block_balanced_... while the registry key was
+# ..._by_switch_prop_block_balanced_...) fails inside the SLURM job, after the
+# submission has already been reported as successful. The whole analysis then
+# produces no MASTER_RESULTS pickle, and the absence only shows up much later
+# as a missing row in the re-plot index. Check the names here, before
+# submitting anything.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+if [ ! -f "$REPO_ROOT/src/analysis/config/condition_registry.py" ]; then
+    echo "ERROR: no condition registry at $REPO_ROOT/src/analysis/config/" \
+         "condition_registry.py; cannot check the condition names." >&2
+    exit 1
+fi
+PYTHONPATH="$REPO_ROOT" python -c "
+import sys
+from src.analysis.config.condition_registry import CONDITION_REGISTRY
+bad = [c for c in sys.argv[1:] if c not in CONDITION_REGISTRY]
+if bad:
+    import difflib
+    for name in bad:
+        close = difflib.get_close_matches(name, CONDITION_REGISTRY, n=3)
+        print(f'  {name!r} is not in CONDITION_REGISTRY'
+              + (f' -- did you mean: {\", \".join(close)}?' if close else ''))
+    sys.exit(1)
+" "${CONDITIONS[@]}" || {
+    echo "ERROR: refusing to submit; fix the condition names above." >&2
+    exit 1
+}
+
 # Override this in the environment when decoding a different epochs dataset.
 EPOCHS_ROOT_FILE="${EPOCHS_ROOT_FILE:-Stimulus_-1.0to1.5sec_0.5sec_within-1.0-0.0sec_base_decFactor_8_outliers_10_drop_thresh_perc_5.0_70.0-150.0_Hz_padLength_1.5s_stat_func_ttest_ind_equal_var_False_nan_policy_omit}"
 

@@ -305,14 +305,26 @@ CONDITION = 'stimulus_lwpc_block_balanced_conditions'
 COMPARISONS = ['i_vs_c_at_inc25', 'i_vs_c_at_inc75']
 ROIS = ['lpfc', 'acc']
 
+# The four analyses the paper figures are built from. Every one of them has to
+# re-plot: a re-plot path exercised only on LWPC is how "it only draws LWPC"
+# becomes plausible in the first place.
+ALL_ANALYSES = [
+    'stimulus_lwpc_block_balanced_conditions',
+    'stimulus_lwps_block_balanced_conditions',
+    'stimulus_congruency_by_switch_prop_block_balanced_conditions',
+    'stimulus_switch_type_by_inc_prop_block_balanced_conditions',
+]
 
-def _master_results():
+
+def _master_results(condition=CONDITION):
     """A results dict shaped exactly like the one decoding_dcc.py pickles."""
     rng = np.random.default_rng(1)
-    condition_name = (CONDITION_REGISTRY[CONDITION]['context_comparison']
-                      ['condition_name'])
+    entry = CONDITION_REGISTRY[condition]
+    condition_name = entry['context_comparison']['condition_name']
+    comparisons = [entry['context_comparison']['condition_comparison_1'],
+                   entry['context_comparison']['condition_comparison_2']]
     stats = {}
-    for i, comparison in enumerate(COMPARISONS):
+    for i, comparison in enumerate(comparisons):
         stats[comparison] = {
             roi: {
                 'repeat_true_accs': 0.55 + rng.normal(0, 0.05, (20, N_TIME)),
@@ -329,7 +341,7 @@ def _master_results():
         'stats': stats,
         'metadata': {
             'args': {
-                'condition_label': CONDITION,
+                'condition_label': condition,
                 'unit_of_analysis': 'repeat',
                 'timestamp': '20260814_000636',
                 'subjects': ['D0057', 'D0059'],
@@ -338,7 +350,7 @@ def _master_results():
                 'clf_model_str': 'LDA',
             },
             'analysis_params_str': (
-                'job52094028_stimulus_lwpc_block_balanced_conditions_2_subs_'
+                f'job52094028_{condition}_2_subs_'
                 'anova_csv_elecs_anova_congruency_only_LDA_20boots'
             ),
             'electrode_set_label': 'anova_csv_elecs_anova_congruency_only',
@@ -440,6 +452,127 @@ def test_replot_rejects_a_results_file_with_no_time_axis(tmp_path):
     del master['metadata']['time_window_centers']
     with pytest.raises(ValueError, match='time_window_centers'):
         replot_master_results(master, str(tmp_path))
+
+
+# --- every analysis re-plots, not just LWPC -----------------------------
+
+@pytest.mark.parametrize('condition', ALL_ANALYSES)
+def test_every_block_balanced_analysis_replots(condition, tmp_path):
+    """LWPS and the two cross-proportion analyses draw the same panels as LWPC.
+
+    Their figures went missing because the decoding jobs never ran, not because
+    the re-plot path skips them -- this pins that down so the two explanations
+    stay distinguishable.
+    """
+    from src.analysis.decoding.plots.replot import replot_master_results
+
+    written = replot_master_results(_master_results(condition), str(tmp_path))
+    # per ROI: one comparison panel + one true-vs-shuffle panel per comparison
+    assert len(written) == len(ROIS) * 3
+    for stem in written:
+        assert os.path.exists(f'{stem}.png'), stem
+
+    condition_name = (CONDITION_REGISTRY[condition]['context_comparison']
+                      ['condition_name'])
+    assert any(f'{condition_name}_comparison' in stem for stem in written)
+
+
+def test_replot_all_keeps_the_four_analyses_apart(tmp_path):
+    """One sweep over all four analyses writes four separate trees."""
+    from src.analysis.decoding.plots.replot import find_master_results, replot_all
+
+    tree = tmp_path / 'figs'
+    for condition in ALL_ANALYSES:
+        run_dir = tree / condition
+        run_dir.mkdir(parents=True)
+        name = f'20260814_000636_MASTER_RESULTS_job52094028_{condition}.pkl'
+        with open(run_dir / name, 'wb') as handle:
+            pickle.dump(_master_results(condition), handle)
+
+    runs = find_master_results(str(tree))
+    report = replot_all(runs, str(tmp_path / 'clean'))
+
+    assert report['error'].eq('').all(), report['error'].tolist()
+    assert sorted(os.listdir(tmp_path / 'clean')) == sorted(ALL_ANALYSES)
+    per_analysis = report.groupby('condition_label')['n_figures'].sum()
+    assert set(per_analysis.index) == set(ALL_ANALYSES)
+    assert (per_analysis == len(ROIS) * 3).all(), per_analysis.to_dict()
+
+
+def test_analysis_coverage_names_the_analyses_with_no_runs(tmp_path):
+    """The LWPC-only tree that started this: coverage has to say what is absent."""
+    from src.analysis.decoding.plots.replot import (
+        analysis_coverage, find_master_results)
+
+    tree = tmp_path / 'figs'
+    tree.mkdir()
+    with open(tree / f'20260814_000636_MASTER_RESULTS_job1_{CONDITION}.pkl', 'wb') as handle:
+        pickle.dump(_master_results(CONDITION), handle)
+
+    coverage = analysis_coverage(find_master_results(str(tree)))
+    present = coverage[coverage.n_runs > 0]
+    missing = coverage[coverage.n_runs == 0]
+
+    assert list(present['condition_label']) == [CONDITION]
+    assert set(missing['condition_label']) == set(ALL_ANALYSES) - {CONDITION}
+    # The one electrode set on disk is what every analysis is checked against.
+    assert set(coverage['electrode_set_label']) == {
+        'anova_csv_elecs_anova_congruency_only'}
+    assert coverage['in_registry'].all()
+
+
+def test_analysis_coverage_reports_runs_outside_the_expected_list(tmp_path):
+    """A run whose condition label is not expected still has to be reported."""
+    from src.analysis.decoding.plots.replot import (
+        analysis_coverage, find_master_results)
+
+    tree = tmp_path / 'figs'
+    tree.mkdir()
+    master = _master_results(CONDITION)
+    master['metadata']['args']['condition_label'] = 'stimulus_task_conditions'
+    with open(tree / '20260814_000636_MASTER_RESULTS_job1_other.pkl', 'wb') as handle:
+        pickle.dump(master, handle)
+
+    coverage = analysis_coverage(find_master_results(str(tree)))
+    row = coverage[coverage.condition_label == 'stimulus_task_conditions']
+    assert len(row) == 1
+    assert row.iloc[0]['n_runs'] == 1
+    # No context comparison in the registry, so no comparison panel is drawable.
+    assert not row.iloc[0]['in_registry']
+
+
+# --- condition names that drifted out of the registry -------------------
+
+def test_unknown_condition_name_names_the_near_miss():
+    """The typo that killed two analyses' worth of jobs, caught at the source.
+
+    ``stimulus_congruency_by_switch_proportion_block_balanced_conditions`` sat
+    in the launcher while the registry key was ``..._by_switch_prop_...``. A
+    bare KeyError inside a SLURM job is how that stayed invisible.
+    """
+    from src.analysis.config.condition_registry import get_conditions_obj
+
+    typo = 'stimulus_congruency_by_switch_proportion_block_balanced_conditions'
+    with pytest.raises(KeyError) as excinfo:
+        get_conditions_obj(typo)
+    assert 'stimulus_congruency_by_switch_prop_block_balanced_conditions' in str(excinfo.value)
+
+
+def test_the_launcher_only_submits_registered_condition_names():
+    """Every condition the decoding launcher submits has to be a registry key."""
+    import re
+
+    launcher = os.path.join(
+        os.path.dirname(__file__), '..', '..', '..', 'dcc_scripts', 'decoding',
+        'submit_specific_conditions_decoding_dcc.sh')
+    text = open(launcher).read()
+    block = re.search(r'^CONDITIONS=\((.*?)^\)', text, re.S | re.M).group(1)
+    names = [line.strip() for line in block.splitlines()
+             if line.strip() and not line.strip().startswith('#')]
+
+    assert names, 'no conditions found in the launcher'
+    unknown = [n for n in names if n not in CONDITION_REGISTRY]
+    assert not unknown, f'launcher submits unregistered conditions: {unknown}'
 
 
 # --- backwards compatibility with pre-strip callers ---------------------
