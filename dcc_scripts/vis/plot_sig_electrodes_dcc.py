@@ -67,7 +67,10 @@ from src.analysis.utils.general_utils import (
     make_or_load_subjects_electrodes_to_ROIs_dict,
     make_sig_electrodes_per_subject_and_roi_dict,
 )
-from src.analysis.power.power_traces import load_significant_electrodes
+from src.analysis.power.power_traces import (
+    load_significant_electrodes,
+    power_trace_electrode_set,
+)
 from src.analysis.utils.anova_label_selection import load_anova_label_electrodes
 
 # Regex that strips leading zeros from a subject id: 'D0057' -> 'D57', 'D0107A' -> 'D107A'.
@@ -213,19 +216,13 @@ def get_condition_electrodes(subjects, cfg, task, LAB_root,
     # ---- Source 2a: set algebra over power-trace ANOVA effects --------------
     if cfg.get("anova_run_dir") and (
             cfg.get("include_effects") or cfg.get("exclude_effects")):
-        run_dir = cfg["anova_run_dir"]
-        def effect_set(effect):
-            return set(load_significant_electrodes(
-                run_dir, roi=cfg.get("anova_roi"), effect=effect,
-                use_fdr=cfg.get("use_fdr", True),
-                p_thresh=cfg.get("p_thresh", 0.05)))
-
-        included = [effect_set(effect)
-                    for effect in cfg.get("include_effects", ())]
-        selected = set.intersection(*included) if included else set()
-        for effect in cfg.get("exclude_effects", ()):
-            selected -= effect_set(effect)
-        return tuples_to_subject_dict(sorted(selected))
+        return tuples_to_subject_dict(power_trace_electrode_set(
+            cfg["anova_run_dir"],
+            include_effects=cfg.get("include_effects", ()),
+            exclude_effects=cfg.get("exclude_effects", ()),
+            roi=cfg.get("anova_roi"),
+            use_fdr=cfg.get("use_fdr", True),
+            p_thresh=cfg.get("p_thresh", 0.05)))
 
     # ---- Source 2b: within-electrode ANOVA run, filtered by effect ----------
     if cfg.get("anova_run_dir"):

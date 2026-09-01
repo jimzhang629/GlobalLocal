@@ -441,6 +441,64 @@ sh submit_specific_conditions_power_traces_dcc.sh
 # (edit conditions in submit_*.sh and parameters in run_power_traces_dcc.py)
 ```
 
+### 6.1 Feeding those electrodes back into power traces and decoding
+
+Both launchers select electrodes through one variable — `ANOVA_LABELS_CSV` +
+`ANOVA_LABEL_EFFECT` (`both`, `congruency`, `switch_type`, `congruency_only`,
+`switch_type_only`, and the `lwpc`/`lwps` spellings). To point that at the
+**power-trace** definition rather than at A1's window-mean ANOVA (§14), convert a
+finished within-electrode run into the same labels table:
+
+```bash
+cd dcc_scripts/stats
+PT=/hpc/home/$USER/coganlab/$USER/GlobalLocal/dcc_scripts/power/figs/$EPOCHS_ROOT_FILE/anova_within_electrode
+
+# congruency (S) and switchType (F) main effects out of one full-factorial run:
+python make_power_traces_anova_labels.py --run $PT/stimulus_experiment_conditions_24_subjects --roi lpfc
+
+# or LWPC / LWPS, which live in two separate two-factor runs:
+python make_power_traces_anova_labels.py \
+    --s-run $PT/stimulus_lwpc_conditions_24_subjects --s-effect 'C(congruency):C(incongruentProportion)' \
+    --f-run $PT/stimulus_lwps_conditions_24_subjects --f-effect 'C(switchType):C(switchProportion)' \
+    --roi lpfc
+```
+
+It is a pure read of the run's `summary.csv` /
+`significant_effects_structure.json` — seconds, no SLURM, no epoched data — and
+writes `<run>/../power_traces_labels/<slug>/anova_labels.csv` plus a
+`source.json` recording the runs, effects, threshold rule and the S/F/both
+counts. Paste the printed path into `ANOVA_LABELS_CSVS` in
+`power/submit_specific_conditions_power_traces_dcc.sh` or
+`decoding/submit_specific_conditions_decoding_dcc.sh`, with
+`ANOVA_LABEL_CORRECTION=flags`.
+
+The flags come from `power_traces.power_trace_electrode_set` — the same
+primitive behind `plot_sig_electrodes_dcc.get_condition_electrodes` and the
+`congruency_only` / `switch_type_only` / `both` entries of
+`vis/condition_plot_specs.py` — so `ANOVA_LABEL_EFFECT=congruency_only` runs on
+exactly the electrodes `PLOT_SETS=congruency_only` draws on the brain (§10). Two
+things to keep in mind:
+
+- Keep `ELECTRODES` in the launcher equal to whatever the within-electrode run
+  used (`sig` for the `sig_elecs` runs). The label selection is applied *on top*
+  of it, and a mismatch makes the CSV match zero loaded electrodes and abort.
+- `load_significant_electrodes` prefers `significant_effects_structure.json`
+  when a run has one, and current runs always write it — so the flags are the
+  raw cluster p at `--p-thresh` (default 0.05), not the saved BH flags,
+  regardless of `--no-fdr`. The converter prints and records which rule actually
+  applied. Re-threshold downstream with `ANOVA_LABEL_CORRECTION=none|fdr_bh` if
+  you want the other family; the written `p_cong`/`q_cong`/`p_switch`/`q_switch`
+  columns are what those read.
+
+Selecting on the congruency main effect and then measuring *that same contrast*
+is the diagonal cell — see `docs/nested_electrode_selection.md`. The off-diagonal
+cells (select on congruency, measure switch type or the LWPC/LWPS interaction)
+need no correction.
+
+A1′ (§15) writes an equivalent `labels.csv` as a by-product of its count
+battery; use `submit_power_traces_conjunction_dcc.sh` when you want the battery
+too, and this converter when you only want the electrode set.
+
 ---
 
 ## 7. Decoding (`decoding/`)

@@ -48,7 +48,40 @@ ANOVA_UNIT='roi'  # whether to do the stats in terms of 'roi' (across electrodes
 # that single path instead of this list. For example (0--0.5 s, raw/no BH, LWPC):
 #   ANOVA_LABELS_CSV=/path/to/anova_labels.csv ANOVA_LABEL_EFFECT=lwpc \
 #   ANOVA_LABEL_CORRECTION=none bash submit_specific_conditions_decoding_dcc.sh
+#
+# TWO WAYS TO DEFINE THE ELECTRODES, both consumed through this same variable:
+#
+#  (a) A1 -- one window-mean ANOVA per electrode over [WINDOW_TMIN, WINDOW_TMAX]:
+#      the anova_conjunction_window_* directories listed below.
+#
+#  (b) power_traces -- the WITHIN-ELECTRODE windowed ANOVA + cluster correction
+#      the power-trace figures themselves are drawn from, i.e. the runs this
+#      script makes with ANOVA_UNIT=electrode. Convert a run into the same labels
+#      table (a pure read of its summary.csv; seconds, no SLURM):
+#
+#        PT=/hpc/home/$USER/coganlab/$USER/GlobalLocal/dcc_scripts/power/figs/$EPOCHS_ROOT_FILE/anova_within_electrode
+#        python ../stats/make_power_traces_anova_labels.py \
+#            --run $PT/stimulus_experiment_conditions_24_subjects --roi lpfc
+#
+#      then paste the anova_labels.csv it prints into the array below. Its S/F
+#      flags come from the same `power_trace_electrode_set` primitive that
+#      `plot_sig_electrodes_dcc.get_condition_electrodes` uses, so
+#      ANOVA_LABEL_EFFECT=congruency_only selects exactly the electrodes
+#      PLOT_SETS=congruency_only draws on the brain. Use ANOVA_LABEL_CORRECTION=flags
+#      to keep the run's own thresholding.
+#
+#      Keep ELECTRODES below equal to whatever the within-electrode run used
+#      (`sig` for the sig_elecs runs): the selection is applied on top of it, and
+#      a mismatch makes the CSV match zero loaded electrodes and abort the job.
+#
+#      Circularity: selecting on the congruency main effect and then plotting the
+#      congruency contrast is the diagonal cell (docs/nested_electrode_selection.md).
+#      The off-diagonal cells -- select on congruency, plot switch type or the
+#      LWPC/LWPS interaction -- need no correction.
 ANOVA_LABELS_CSVS=(
+#     # power_traces-defined electrodes (see (b) above):
+#     "/hpc/home/jz421/coganlab/jz421/GlobalLocal/dcc_scripts/power/figs/Stimulus_-1.0to1.5sec_0.5sec_within-1.0-0.0sec_base_decFactor_8_outliers_10_drop_and_nan_thresh_perc_5.0_70.0-150.0_Hz_padLength_1.5s_filterbank_hilbert_stat_func_ttest_zmax_20/anova_within_electrode/power_traces_labels/experiment_24_subjects__S-congruency__F-switchType__fdr__roi-lpfc/anova_labels.csv"
+
 #     # "/hpc/home/jz421/coganlab/jz421/GlobalLocal/dcc_scripts/stats/results/Stimulus_-1.0to1.5sec_0.5sec_within-1.0-0.0sec_base_decFactor_8_outliers_10_drop_thresh_perc_5.0_70.0-150.0_Hz_padLength_1.5s_filterbank_hilbert_stat_func_ttest_ind_equal_var_False_nan_policy_omit/anova_conjunction_window_0.0to0.5s_sig_lpfc_condition_fdr_bh/anova_labels.csv"
 #     # "/hpc/home/jz421/coganlab/jz421/GlobalLocal/dcc_scripts/stats/results/Stimulus_-1.0to1.5sec_0.5sec_within-1.0-0.0sec_base_decFactor_8_outliers_10_drop_thresh_perc_5.0_70.0-150.0_Hz_padLength_1.5s_filterbank_hilbert_stat_func_ttest_ind_equal_var_False_nan_policy_omit/anova_conjunction_window_0.5to1.0s_sig_lpfc_condition_fdr_bh/anova_labels.csv"
 #     # "/hpc/home/jz421/coganlab/jz421/GlobalLocal/dcc_scripts/stats/results/Stimulus_-1.0to1.5sec_0.5sec_within-1.0-0.0sec_base_decFactor_8_outliers_10_drop_thresh_perc_5.0_70.0-150.0_Hz_padLength_1.5s_filterbank_hilbert_stat_func_ttest_ind_equal_var_False_nan_policy_omit/anova_conjunction_window_1.0to1.5s_sig_lpfc_condition_fdr_bh/anova_labels.csv"

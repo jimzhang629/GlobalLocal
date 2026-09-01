@@ -28,6 +28,8 @@ from .evoked_builders import (
 from .windowed_anova import (
     run_within_electrode_windowed_anova_cluster_correction,
     load_significant_electrodes,
+    per_electrode_cluster_stats,
+    power_trace_electrode_set,
     process_windowed_data_for_anova,
     create_windowed_anova_dataframe,
     perform_windowed_anova,
@@ -63,6 +65,8 @@ __all__ = [
     # windowed_anova
     "run_within_electrode_windowed_anova_cluster_correction",
     "load_significant_electrodes",
+    "per_electrode_cluster_stats",
+    "power_trace_electrode_set",
     "process_windowed_data_for_anova",
     "create_windowed_anova_dataframe",
     "perform_windowed_anova",

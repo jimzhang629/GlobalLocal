@@ -576,6 +576,88 @@ def load_significant_electrodes(within_elec_anova_run_dir, roi=None, effect=None
     return list(df[['subject', 'electrode']].drop_duplicates()
                   .itertuples(index=False, name=None))
 
+
+def per_electrode_cluster_stats(within_elec_anova_run_dir, effect, roi=None):
+    """One row per electrode TESTED for ``effect`` in a within-electrode run.
+
+    Collapses ``summary.csv`` (one row per surviving cluster, plus one row per
+    electrode that had none) to columns
+    ``subject, electrode, roi, p_cluster, q_cluster, extent, sign``, keeping each
+    electrode's best cluster.
+
+    ``p_cluster`` is the surviving-cluster p and ``q_cluster`` its BH q -- the
+    same two numbers :func:`load_significant_electrodes` thresholds, so a labels
+    table built from these columns re-thresholds to the same electrodes. The
+    graded ``best_cluster_p`` that current runs record for every electrode is
+    carried alongside when present, but is deliberately not substituted for
+    ``p_cluster``: it is a different (finer) quantity, and swapping it in would
+    make a raw-p selection here disagree with the same selection made through
+    :func:`load_significant_electrodes`.
+
+    Returns every electrode, significant or not -- the honest denominator.
+    """
+    import pandas as pd
+    from pathlib import Path
+
+    run_dir = Path(within_elec_anova_run_dir)
+    df = pd.read_csv(run_dir / 'summary.csv')
+    if roi is not None:
+        df = df[df['roi'] == roi]
+    df = df[df['effect'] == effect].copy()
+    if df.empty:
+        raise ValueError(
+            f"effect {effect!r} has no rows in {run_dir}/summary.csv for "
+            f"roi={roi!r}; available: {sorted(pd.read_csv(run_dir / 'summary.csv')['effect'].unique())}")
+
+    if 'extent_windows' not in df:
+        df['extent_windows'] = 0
+    df = df.sort_values(['cluster_p_value', 'extent_windows'],
+                        ascending=[True, False])
+    best = df.groupby(['subject', 'electrode', 'roi'], as_index=False).first()
+
+    out = best[['subject', 'electrode', 'roi']].copy()
+    out['p_cluster'] = best['cluster_p_value'].to_numpy()
+    out['q_cluster'] = (best['cluster_p_fdr'].to_numpy()
+                        if 'cluster_p_fdr' in best else float('nan'))
+    out['extent'] = best['extent_windows'].to_numpy()
+    out['sign'] = best['sign'].to_numpy() if 'sign' in best else 0
+    if 'best_cluster_p' in best:
+        out['best_cluster_p'] = best['best_cluster_p'].to_numpy()
+    return out
+
+
+def power_trace_electrode_set(within_elec_anova_run_dir, include_effects=(),
+                              exclude_effects=(), roi=None, use_fdr=True,
+                              p_thresh=0.05):
+    """Set algebra over a within-electrode ANOVA run's effects.
+
+    Electrodes significant for EVERY effect in ``include_effects`` and for NONE
+    in ``exclude_effects``, as a sorted set of ``(subject, electrode)`` tuples.
+    This is the primitive behind the ``congruency_only`` / ``switch_type_only`` /
+    ``both`` populations: e.g. ``include_effects=('C(congruency)',)`` with
+    ``exclude_effects=('C(switchType)',)`` is `congruency_only`.
+
+    Every argument other than the two effect tuples is passed straight to
+    :func:`load_significant_electrodes`, so the sets returned here are exactly
+    the ones the brain plots draw and the ones a labels table built from this
+    run will flag.
+
+    An empty ``include_effects`` yields the empty set: "significant for no
+    particular effect" is not a population, and returning every electrode there
+    would silently turn an exclusion-only spec into a near-whole-ROI selection.
+    """
+    def effect_set(effect):
+        return set(load_significant_electrodes(
+            within_elec_anova_run_dir, roi=roi, effect=effect,
+            use_fdr=use_fdr, p_thresh=p_thresh))
+
+    included = [effect_set(effect) for effect in include_effects]
+    selected = set.intersection(*included) if included else set()
+    for effect in exclude_effects:
+        selected -= effect_set(effect)
+    return sorted(selected)
+
+
 def process_windowed_data_for_anova(subjects_mne_objects, condition_names, rois, subjects,
                                     electrodes_per_subject_roi, window_size=64,
                                     step_size=16, sampling_rate=256):
