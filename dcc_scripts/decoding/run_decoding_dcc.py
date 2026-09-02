@@ -64,7 +64,12 @@ TASK = 'GlobalLocal'
 ACC_TRIALS_ONLY = True
 
 # Parallel processing
-N_JOBS = -1 
+# Every joblib worker is a separate process that gets its own pickled copy of
+# subjects_mne_objects, so worker count drives peak memory as much as it drives
+# speed. -1 asks for one worker per core the machine appears to have, which under
+# SLURM can be the whole node rather than the cores actually allocated to us --
+# a fast route to OUT_OF_MEMORY. Honour the allocation instead.
+N_JOBS = int(os.environ.get('N_JOBS', os.environ.get('SLURM_CPUS_PER_TASK', 5)))
 
 # DECODING PARAMETERS
 # First, choose your classifier

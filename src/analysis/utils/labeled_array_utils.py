@@ -930,9 +930,13 @@ def make_bootstrapped_roi_labeled_arrays_with_nan_trials_removed_for_each_channe
         dict: A dictionary where keys are ROI names and values are lists of
               bootstrapped `LabeledArray` objects.
     """
-    # Use joblib to parallelize the processing of each ROI
-    results = Parallel(n_jobs=n_jobs)(
-        delayed(make_bootstrapped_roi_labeled_array_with_nan_trials_removed_for_each_channel)(
+    # Each parallel worker is a separate process, so joblib has to pickle the whole
+    # of subjects_data_objects (every subject's preloaded MNE object) into it. That
+    # roughly doubles peak memory per worker, which is enough to blow a job's memory
+    # limit on its own. When there is only one ROI there is nothing to overlap, so
+    # run in-process and skip the copy entirely.
+    def _make_for_roi(i, roi):
+        return make_bootstrapped_roi_labeled_array_with_nan_trials_removed_for_each_channel(
             roi,
             subjects_data_objects,
             condition_names,
@@ -944,8 +948,17 @@ def make_bootstrapped_roi_labeled_arrays_with_nan_trials_removed_for_each_channe
             time_axs,
             freq_axs,
             random_state + i if random_state is not None else None  # Ensure different seeds for parallel jobs
-        ) for i, roi in enumerate(rois)
-    )
+        )
+
+    if n_jobs == 1 or len(rois) <= 1:
+        results = [_make_for_roi(i, roi) for i, roi in enumerate(rois)]
+    else:
+        # Never spin up more workers than there are ROIs to process; each idle worker
+        # would still hold a full copy of the data.
+        effective_n_jobs = len(rois) if n_jobs < 0 else min(n_jobs, len(rois))
+        results = Parallel(n_jobs=effective_n_jobs)(
+            delayed(_make_for_roi)(i, roi) for i, roi in enumerate(rois)
+        )
 
     # Combine the results from the parallel jobs into a dictionary
     roi_bootstrapped_arrays = {roi: result for roi, result in zip(rois, results) if result}
