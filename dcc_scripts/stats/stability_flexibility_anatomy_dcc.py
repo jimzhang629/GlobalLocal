@@ -446,6 +446,28 @@ def main(args):
             "src/analysis/config/rois.py and that the electrode ids in the labels "
             "match the ROI dict's '{subject}-{channel}' spelling.")
 
+    # ``task_related`` is the independent stimulus-vs-baseline screen written by
+    # make_epoched_data, not the union of the congruency/switch ANOVA effects.
+    if args.data_source == 'synthetic':
+        lab_roi['task_related'] = lab_roi['group'] != 'neither'
+    else:
+        from src.analysis.utils.general_utils import get_sig_chans_per_subject
+        sig_lab_root = LAB_root or resolve_lab_root(args.LAB_root)
+        sig_by_subject = get_sig_chans_per_subject(
+            args.subjects, args.epochs_root_file, task=args.task,
+            LAB_root=sig_lab_root)
+        sig_ids = {
+            f"{subject}-{channel}"
+            for subject, channels in sig_by_subject.items()
+            for channel in channels
+        }
+        canonical_ids = (lab_roi['subject'].astype(str) + '-' +
+                         lab_roi['electrode'].astype(str).str.replace(
+                             r'^D\d+[A-Za-z]*-', '', regex=True))
+        lab_roi['task_related'] = canonical_ids.isin(sig_ids)
+        print(f"make_epoched_data task-related electrodes in analysis scope: "
+              f"{int(lab_roi['task_related'].sum())}")
+
     # 4. anatomical level + coverage ---------------------------------------------
     roi_col = resolve_anat_level(anat_level, lab_roi, roi_filter)
     coverage = sfa.build_coverage_matrix(lab_roi, roi_col=roi_col)

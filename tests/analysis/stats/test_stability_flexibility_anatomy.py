@@ -294,9 +294,20 @@ def test_brain_plot_falls_back_to_a_histogram_without_the_surface_stack(tmp_path
     """Off-cluster (no mne/pyvista/recons) the job must still produce a figure."""
     labels, e2r, e2a = sfa._synthetic_anatomy(seed=2, return_anat=True)
     lab = sfa.attach_roi(labels, e2r, electrodes_to_anat=e2a)
+    # The task-related screen is independent of S/F selectivity.
+    lab['task_related'] = lab['electrode'].str.endswith(('e0', 'e1'))
 
     out = sfa.plot_selectivity_groups_on_brain(
         lab, str(tmp_path / 'selectivity_groups_on_brain.png'))
+
+    expected = lab.drop_duplicates(['subject', 'electrode'])
+    assert out['counts'] == {
+        'all_lpfc': len(expected),
+        'task_related_lpfc': int(expected['task_related'].sum()),
+        'congruency_only': int((expected['group'] == 'S_only').sum()),
+        'switch_type_only': int((expected['group'] == 'F_only').sum()),
+        'both': int((expected['group'] == 'both').sum()),
+    }
 
     if out['fallback']:
         assert out['combined'].endswith('_roi_hist.png')
