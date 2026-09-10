@@ -31,8 +31,10 @@ adaptation (LWPS) rely on shared or independent neural mechanisms in lPFC?
    main-effect contrasts are now cell-balanced (§2.2b), and the default
    responsiveness proxy no longer double-counts the effects it is meant to
    control for (§2.2c). Under a simulated true null the estimator moved from
-   −0.25 … +0.62 to roughly ±0.07. One item remains open: the categorical arm
-   still scores main effects the old way (§2.2b, "What is still open").
+   −0.25 … +0.62 — including ρ = +0.45 at *p* = 0.0005, a confident wrong
+   answer — to within ±0.06, non-significant throughout. One item remains open:
+   the categorical arm still scores main effects the old way (§2.2b, "What is
+   still open").
 4. **Leave the power traces alone.** Their structure is fine; the pain we found
    is specific to the pseudopopulation, which they don't use.
 5. **Retire the block-context accuracy comparisons.** They are confounded by
@@ -258,14 +260,16 @@ How completely they swamp them is the striking part. Across three simulated
 regimes, the split-averaged estimator and the naive same-trial estimator agree
 to three decimal places:
 
-| regime | naive (all trials) | split-averaged (old) | within-split (new) |
+| coupling present in the data | naive (all trials) | split-averaged (old) | within-split (new) |
 |---|---|---|---|
-| A | −0.2777 | −0.2780 | −0.2074 |
-| B | +0.6153 | +0.6157 | +0.4866 |
-| C | +0.0591 | +0.0609 | +0.0535 |
+| shared pooled SD | −0.2777 | −0.2780 | −0.2074 |
+| non-orthogonal design | +0.6153 | +0.6157 | +0.4866 |
+| none (clean control) | +0.0591 | +0.0609 | +0.0535 |
 
-200 splits bought nothing at all. (Regimes defined in §2.2b; truth is 0 in all
-three.)
+200 splits bought nothing at all. Truth is 0 in all three; the §2.2b table
+reproduces the same agreement across six more rows. (These are the *pre-fix*
+numbers — the two couplings named in the first two rows are what §2.2b and §2.2c
+go on to remove.)
 
 **The fix.** Correlate *within* each split, then average the correlations:
 
@@ -322,16 +326,16 @@ couplings, both of which survive the disjoint split untouched, because both are
 **signal** confounds rather than noise confounds — they are present identically
 in every trial and therefore in every half.
 
-- **Regime B — design non-orthogonality.** If congruency and switchType are
+- **Design non-orthogonality.** If congruency and switchType are
   correlated in the trial table, an electrode with a purely congruency-driven
   response still scores a switch effect, because its incongruent trials are
   disproportionately switch trials. Every electrode inherits the same leakage,
   which is precisely what a spurious across-electrode correlation is made of.
-- **Regime A — the shared pooled SD.** Cohen's *d* divides by an SD estimated
+- **The shared pooled SD.** Cohen's *d* divides by an SD estimated
   from the same trials. A large stability effect inflates the within-group
   variance that the flexibility contrast divides by, deflating it — a *negative*
-  coupling, which is the direction that would masquerade as segregation. (Regime
-  A turned out to have a second, larger contributor as well; see §2.2c.)
+  coupling, which is the direction that would masquerade as segregation. (This
+  one turned out to have a second, larger contributor as well; see §2.2c.)
 
 Both are fixed at the contrast level, not the split level. Scoring a main effect
 as the equal-weight mean of the within-cell differences makes the two contrasts
@@ -342,19 +346,31 @@ x = ½[(m_is − m_cs) + (m_ir − m_cr)]        # congruency, equal weight over
 y = ½[(m_cs − m_cr) + (m_is − m_ir)]        # switch, equal weight over congruency
 ```
 
-Simulated under a true null, ~330 electrodes, 12 subjects:
+Run through the module itself, toggling **only** `BALANCE_MAIN_EFFECTS` on
+identical data — true ρ = 0, ~330 electrodes, 12 subjects, cells 20–99 per
+electrode (comparable to the real 11–63), congruency strongly correlated with
+switchType:
 
-| regime | scoring | naive | within-split |
-|---|---|---|---|
-| B (non-orthogonal design) | pooled two-group (old) | +0.58 | +0.44 |
-| B | cell-weighted (new) | −0.21 | **−0.07** |
-| A (shared pooled SD) | pooled two-group (old) | −0.23 | −0.18 |
-| A | cell-weighted (new) | −0.09 | **−0.09** |
-| C (clean control) | either | ≈ 0 | ≈ 0 |
+| seed | scoring | naive | split-averaged | within-split | p |
+|---|---|---|---|---|---|
+| 0 | pooled two-group (old) | +0.5375 | +0.5372 | +0.4526 | 0.0005 |
+| 0 | cell-weighted (new) | −0.0049 | −0.0045 | **+0.0267** | 0.55 |
+| 1 | pooled two-group (old) | +0.4545 | +0.4552 | +0.3806 | 0.0005 |
+| 1 | cell-weighted (new) | −0.0809 | −0.0811 | **−0.0327** | 0.51 |
+| 2 | pooled two-group (old) | +0.5315 | +0.5320 | +0.4545 | 0.0005 |
+| 2 | cell-weighted (new) | −0.0458 | −0.0469 | **−0.0082** | 0.87 |
 
-Neither change alone suffices: cell-weighting removes the signal-mediated
-coupling, the split removes the noise-mediated coupling, and only together do
-all four regimes land near zero.
+Read the old rows carefully: **ρ ≈ +0.45 at p = 0.0005, on data with no
+relationship whatever.** That is not a mild bias, it is a confident wrong answer
+in the "shared core" direction — and the within-split fix alone does not save
+it (+0.45, still p = 0.0005). This table is also the cleanest demonstration of
+§2.2: naive and split-averaged agree to three or four decimals in all six rows.
+
+In this particular regime the cell-weighting does nearly all the work and the
+split adds a little, because the coupling here is signal-mediated. The
+shared-pooled-SD regime splits the credit differently, and the pure-noise regime
+in §2.2 is one the split fixes and cell-weighting cannot. Neither change subsumes
+the other; only together do all the regimes land near zero.
 
 **Note this only applies to `contrast_mode='condition'`.** The interaction path
 (`contrast_mode='proportion'`, the manuscript's primary mode) has always used an
@@ -362,11 +378,11 @@ equal-cell-weight difference-of-differences, and is protected already. This
 extends the same treatment one level down, to main effects.
 
 Also tested and **rejected**: dropping the denominator entirely (a raw
-cell-balanced mean difference). It fixes regime B equally well but is markedly
-*worse* in regime A (−0.25 … −0.29 vs −0.09), because without standardisation
-the sensitivities scale with per-electrode gain and the linear responsiveness
-residualisation does not fully remove a multiplicative gain term. Keep the
-pooled within-cell SD.
+cell-balanced mean difference). It fixes the non-orthogonality equally well but
+is markedly *worse* against the shared pooled SD (−0.25 … −0.29 vs −0.09),
+because without standardisation the sensitivities scale with per-electrode gain
+and the linear responsiveness residualisation does not fully remove a
+multiplicative gain term. Keep the pooled within-cell SD.
 
 **One cost: it needs more trials per cell.** The balanced form requires ≥ 2
 trials in each of the four 2×2 cells *of each half*, i.e. **≥ 4 per cell before
@@ -382,7 +398,7 @@ cell counts need looking at before the number means anything.
 ### 2.2c The responsiveness proxy was a function of the effects — **fixed**
 
 **Status: implemented** (`add_responsiveness`). A plain bug, found by chasing the
-residual regime-A bias after §2.2b.
+residual shared-pooled-SD bias after §2.2b.
 
 `prepare_continuous` residualises *x* and *y* on `resp` to remove the shared
 gain/SNR confound. That only works if `resp` measures **gain** and nothing else.
@@ -394,7 +410,7 @@ electrode's mean the same way (which is what a population-level effect *means*),
 the two residuals apart, so the correction manufactures a **negative**
 correlation — spurious *segregation*, the more publishable direction.
 
-Regime A, naive estimator, three seeds:
+The shared-pooled-SD regime, naive estimator, three seeds:
 
 | responsiveness proxy | seed 0 | seed 1 | seed 2 |
 |---|---|---|---|
@@ -409,7 +425,7 @@ This only affects runs that used the **default** proxy. `add_responsiveness`
 takes an explicit `responsiveness=` argument and the guide already recommends
 passing a baseline-vs-signal cluster statistic; runs that did so are unaffected.
 
-Taken together over regime A, the three fixes compose:
+Taken together over that regime, the three fixes compose:
 
 ```
 −0.25   original
@@ -419,11 +435,11 @@ Taken together over regime A, the three fixes compose:
 
 **What is still open.** `per_electrode_labels` — the categorical (A3) arm —
 scores simple contrasts through `_effect_from_arrays`, not `_effect_for`, so it
-still uses the old pooled two-group form and is still exposed to the regime-B
-leakage. It was left alone deliberately: changing it would change the S/F label
-counts and the conjunction table, i.e. published numbers, and its
-within-electrode permutation null is a separate design with its own documented
-caveats. The consequence is an asymmetry worth knowing about when reading
+still uses the old pooled two-group form and is still exposed to the
+design-non-orthogonality leakage of §2.2b. It was left alone deliberately:
+changing it would change the S/F label counts and the conjunction table, i.e.
+published numbers, and its within-electrode permutation null is a separate
+design with its own documented caveats. The consequence is an asymmetry worth knowing about when reading
 `electrodes.csv`: `x`/`y` are now cell-balanced, `S`/`F` are not. Resolve before
 the categorical arm is used for anything load-bearing in `condition` mode.
 

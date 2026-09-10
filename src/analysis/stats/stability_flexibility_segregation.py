@@ -583,11 +583,20 @@ def _interaction_effect(hg, cond, mod, effect_measure, alpha, w=None):
 # this (W_INTERACTION); this extends it to main effects.
 #
 # Simulated under a true null (independent per-electrode sensitivities), 12
-# subjects, ~330 electrodes, congruency correlated with switchType:
+# subjects, ~330 electrodes, 20-99 trials per cell, congruency strongly
+# correlated with switchType; only this flag differs between the two rows:
 #
-#     scoring                          naive     within-split
-#     pooled two-group (old)          +0.58         +0.44
-#     cell-weighted    (new)          -0.21         -0.07
+#     scoring                          naive     within-split      p
+#     pooled two-group (old)          +0.54         +0.45        0.0005
+#     cell-weighted    (new)          -0.00         +0.03        0.55
+#
+# i.e. the old scoring returns a confident "shared core" on data with no
+# relationship at all, and the within-split fix alone does NOT rescue it.
+#
+# Costs more trials: this form needs >= 2 trials in EACH of the four cells of
+# EACH half (>= 4 per cell before splitting), where the two-group form needed
+# only 2 per group. `split_resolved_corr` warns if that starts dropping
+# electrodes.
 #
 # Set False to recover the old trial-count-weighted behaviour for comparison.
 BALANCE_MAIN_EFFECTS = True
