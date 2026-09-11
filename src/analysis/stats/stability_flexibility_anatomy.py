@@ -85,11 +85,11 @@ import numpy as np
 import pandas as pd
 
 GROUPS = ["both", "S_only", "F_only", "neither"]
-# colour-blind-safe, matched to the segregation summary figure (STAB / FLEX)
+# Requested task-selectivity convention for the brain maps.
 GROUP_COLORS = {
-    "both": "#31a354",     # green  — carries both processes
-    "S_only": "#2c7fb8",   # blue   — stability (LWPC) only
-    "F_only": "#d95f0e",   # orange — flexibility (LWPS) only
+    "both": "#000000",     # black — congruency and switch type
+    "S_only": "#ff0000",   # red   — congruency only
+    "F_only": "#0000ff",   # blue  — switch type only
     "neither": "#cccccc",  # grey
 }
 
@@ -610,6 +610,20 @@ def plot_selectivity_groups_on_brain(labels_with_roi, out_path, coverage=None,
     figure rather than crashing the job.
     """
     colors = dict(GROUP_COLORS if colors is None else colors)
+    deduplicated = labels_with_roi.drop_duplicates(['subject', 'electrode'])
+    task_related = (deduplicated['task_related'].astype(bool)
+                    if 'task_related' in deduplicated
+                    else deduplicated['group'] != 'neither')
+    counts = {
+        'all_lpfc': len(deduplicated),
+        'task_related_lpfc': int(task_related.sum()),
+        'congruency_only': int((deduplicated['group'] == 'S_only').sum()),
+        'switch_type_only': int((deduplicated['group'] == 'F_only').sum()),
+        'both': int((deduplicated['group'] == 'both').sum()),
+    }
+    print("[A3] LPFC electrode counts:")
+    for population, count in counts.items():
+        print(f"[A3]   {population}: {count}")
     by_subject = group_electrodes_by_subject(labels_with_roi, groups=groups)
     base, ext = os.path.splitext(out_path)
     if ext.lower() not in ('.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp'):
@@ -704,8 +718,36 @@ def plot_selectivity_groups_on_brain(labels_with_roi, out_path, coverage=None,
                 per_group[g] = gpath
                 print(f"[A3] brain figure ({g}) -> {gpath}")
 
-        counts = {g: sum(len(v) for v in by_subject.get(g, {}).values())
-                  for g in groups}
+        # Also emit the two useful supersets as separate, single-colour maps.
+        # After ROI_FILTER=lpfc, ``all_lpfc`` is anatomical coverage and
+        # ``task_related_lpfc`` is the independent make_epoched_data
+        # stimulus-vs-baseline significant-electrode population.
+        aggregate_specs = {
+            'all_lpfc': (labels_with_roi, '#00a000'),
+            'task_related_lpfc': (
+                labels_with_roi[
+                    labels_with_roi['task_related'].astype(bool)
+                    if 'task_related' in labels_with_roi
+                    else labels_with_roi['group'] != 'neither'],
+                '#ffff00'),
+        }
+        for name, (aggregate_labels, color) in aggregate_specs.items():
+            aggregate_by_subject = group_electrodes_by_subject(
+                aggregate_labels.assign(group=name), groups=(name,))
+            aggregate_indices = electrodes_to_global_indices(
+                aggregate_by_subject[name], offsets)
+            if not aggregate_indices:
+                continue
+            aggregate_fig = plot_on_average(
+                subjects_no_zeros, picks=sorted(aggregate_indices), rm_wm=rm_wm,
+                hemi=hemi, color=mcolors.to_rgb(color), size=size,
+                transparency=transparency, show=False, **vis_kwargs)
+            aggregate_path = f"{base}_{name}.png"
+            aggregate_fig.save_image(aggregate_path)
+            aggregate_fig.close()
+            per_group[name] = aggregate_path
+            print(f"[A3] brain figure ({name}) -> {aggregate_path}")
+
         return dict(combined=out_path, per_group=per_group, counts=counts,
                     fallback=False)
 
@@ -716,7 +758,7 @@ def plot_selectivity_groups_on_brain(labels_with_roi, out_path, coverage=None,
         plot_roi_group_histograms(labels_with_roi, out_path=fallback,
                                   groups=groups, coverage=coverage,
                                   roi_col=roi_col)
-        return dict(combined=fallback, per_group={}, fallback=True,
+        return dict(combined=fallback, per_group={}, counts=counts, fallback=True,
                     error=f"{type(exc).__name__}: {exc}")
 
 
