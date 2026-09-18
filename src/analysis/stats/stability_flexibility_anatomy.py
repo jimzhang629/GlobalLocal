@@ -663,9 +663,28 @@ def _looks_blank(path):
     return float(np.all(px == px[0], axis=-1).mean()) > 0.999
 
 
+def _clear_stale_figure(path):
+    """Delete ``path`` from a previous run before attempting to rewrite it.
+
+    A run dir is reused across runs, and the degraded figure goes to a DIFFERENT
+    filename (``<base>_by_roi.png``), so a render that falls back leaves the
+    previous run's brain PNG sitting there untouched. Read at face value that
+    says the new settings did nothing -- it is how a rerun with a changed
+    ``BRAIN_HEMI`` can appear to have been ignored. Clear it first so a missing
+    figure is visibly missing.
+    """
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        pass
+    except OSError as exc:          # read-only dir, etc. -- not worth failing on
+        print(f"[A3] could not remove the previous {path} "
+              f"({type(exc).__name__}: {exc})")
+
+
 def _render_electrode_sets(sets, out_path, subjects, hemi='both', size=0.45,
                            transparency=0.4, rm_wm=False, per_set_figures=False,
-                           **vis_kwargs):
+                           zoom=None, **vis_kwargs):
     """Render colour-coded electrode sets on the fsaverage brain. Raises on failure.
 
     ``sets`` is a list of ``(name, {subject: [channels]}, colour)``. Each set is
@@ -673,6 +692,13 @@ def _render_electrode_sets(sets, out_path, subjects, hemi='both', size=0.45,
     only thing the renderer supports (one colour per call) and is why both the
     discrete group figure and the continuous score map are expressed as a list of
     single-colour sets — the continuous one just bins its scalar first.
+
+    ``hemi`` is passed straight through to the renderer ('both' | 'lh' | 'rh' |
+    'split') and ``zoom`` re-framed onto every panel right before the
+    screenshot, because each electrode batch resets the cameras (see
+    ``jim_mri.apply_brain_zoom``) — without that last call a ``split`` figure
+    comes out with its two hemispheres edge to edge, reading as the single-brain
+    'both' view.
 
     Callers own the fallback: this function raises when the surface stack or the
     recon templates are missing, and each public plotting function catches that
@@ -721,10 +747,13 @@ def _render_electrode_sets(sets, out_path, subjects, hemi='both', size=0.45,
     import matplotlib.colors as mcolors
     from dcc_scripts.vis.plot_sig_electrodes_dcc import (
         electrodes_to_global_indices, save_brain_image)
-    from src.analysis.vis.jim_mri import plot_on_average
+    from src.analysis.vis.jim_mri import (
+        apply_brain_zoom, plot_on_average, resolve_brain_zoom)
 
     offsets, subjects_no_zeros = _fsaverage_index_space(subjects)
     base, _ = os.path.splitext(out_path)
+    panel_zoom = resolve_brain_zoom(hemi, zoom)
+    print(f"[A3] brain layout: hemi={hemi} zoom={panel_zoom:g}")
 
     picks = [(name, sorted(electrodes_to_global_indices(by_subject, offsets)),
               mcolors.to_rgb(color)) for name, by_subject, color in sets]
@@ -737,9 +766,13 @@ def _render_electrode_sets(sets, out_path, subjects, hemi='both', size=0.45,
         fig = plot_on_average(subjects_no_zeros, picks=idx, rm_wm=rm_wm,
                               hemi=hemi, color=rgb, size=size,
                               transparency=transparency, fig=fig, show=show,
-                              **vis_kwargs)
+                              zoom=zoom, **vis_kwargs)
     if fig is None:
         raise RuntimeError("no electrodes in any set to plot")
+    # The last electrode batch left the cameras at MNE's auto-fit distance, so
+    # re-frame before grabbing the pixels -- this is what actually puts the gap
+    # between the two ``split`` hemispheres in the saved PNG.
+    apply_brain_zoom(fig, panel_zoom)
     # ``save_brain_image`` (not ``Brain.save_image``) because pyvista < 0.48
     # doesn't make the render window current before grabbing its framebuffer;
     # the helper retries with an explicit ``MakeCurrent()``.
@@ -751,7 +784,7 @@ def _render_electrode_sets(sets, out_path, subjects, hemi='both', size=0.45,
         raise RuntimeError(
             f"the brain figure written to {out_path} is blank -- the render "
             f"window produced an empty frame")
-    print(f"[A3] brain figure -> {out_path}")
+    print(f"[A3] brain figure -> {out_path}  (hemi={hemi})")
 
     per_set = {}
     if per_set_figures:
@@ -761,7 +794,8 @@ def _render_electrode_sets(sets, out_path, subjects, hemi='both', size=0.45,
             sfig = plot_on_average(subjects_no_zeros, picks=idx, rm_wm=rm_wm,
                                    hemi=hemi, color=rgb, size=size,
                                    transparency=transparency, show=show,
-                                   **vis_kwargs)
+                                   zoom=zoom, **vis_kwargs)
+            apply_brain_zoom(sfig, panel_zoom)
             path = f"{base}_{name}.png"
             saved = save_brain_image(sfig, path)
             sfig.close()
@@ -773,7 +807,7 @@ def _render_electrode_sets(sets, out_path, subjects, hemi='both', size=0.45,
             per_set[name] = path
             print(f"[A3] brain figure ({name}) -> {path}")
 
-    return dict(combined=out_path, per_set=per_set,
+    return dict(combined=out_path, per_set=per_set, hemi=hemi, zoom=panel_zoom,
                 counts={name: len(idx) for name, idx, _ in picks})
 
 
@@ -820,6 +854,7 @@ def plot_selectivity_groups_on_brain(labels_with_roi, out_path, coverage=None,
         out_path = base + '.png'
     if subjects is None:
         subjects = sorted(labels_with_roi['subject'].astype(str).unique())
+    _clear_stale_figure(out_path)
 
     try:
         # Reuse the project's electrode renderer + its index bookkeeping rather
@@ -831,7 +866,8 @@ def plot_selectivity_groups_on_brain(labels_with_roi, out_path, coverage=None,
             transparency=transparency, rm_wm=rm_wm,
             per_set_figures=per_group_figures, **vis_kwargs)
         return dict(combined=rendered['combined'], per_group=rendered['per_set'],
-                    counts=rendered['counts'], fallback=False)
+                    counts=rendered['counts'], hemi=rendered['hemi'],
+                    zoom=rendered['zoom'], fallback=False)
 
     except Exception as exc:  # pragma: no cover - depends on cluster-only stack
         print(f"[A3] brain-surface render unavailable ({type(exc).__name__}: {exc}); "
@@ -840,7 +876,7 @@ def plot_selectivity_groups_on_brain(labels_with_roi, out_path, coverage=None,
         plot_roi_group_histograms(labels_with_roi, out_path=fallback,
                                   groups=groups, coverage=coverage,
                                   roi_col=roi_col)
-        return dict(combined=fallback, per_group={}, fallback=True,
+        return dict(combined=fallback, per_group={}, hemi=hemi, fallback=True,
                     error=f"{type(exc).__name__}: {exc}")
 
 
@@ -1547,13 +1583,15 @@ def plot_scores_on_brain(scores_with_roi, out_path, value_col='delta',
                            f"{label or value_col}  (clipped at {clip_pct}th pct)",
                            f"{base}_colorbar.png")
 
+    _clear_stale_figure(out_path)
     try:
         rendered = _render_electrode_sets(sets, out_path, subjects=subjects,
                                           hemi=hemi, size=size,
                                           transparency=transparency,
                                           rm_wm=rm_wm, **vis_kwargs)
         return dict(combined=rendered['combined'], colorbar=cbar, vlim=(lo, hi),
-                    n_electrodes=int(len(d)), fallback=False)
+                    n_electrodes=int(len(d)), hemi=rendered['hemi'],
+                    zoom=rendered['zoom'], fallback=False)
     except Exception as exc:  # pragma: no cover - depends on cluster-only stack
         print(f"[A3] brain-surface render unavailable ({type(exc).__name__}: {exc}); "
               f"falling back to the by-ROI figure.")
@@ -1565,7 +1603,7 @@ def plot_scores_on_brain(scores_with_roi, out_path, value_col='delta',
         else:
             fallback = None
         return dict(combined=fallback, colorbar=cbar, vlim=(lo, hi),
-                    n_electrodes=int(len(d)), fallback=True,
+                    n_electrodes=int(len(d)), hemi=hemi, fallback=True,
                     error=f"{type(exc).__name__}: {exc}")
 
 

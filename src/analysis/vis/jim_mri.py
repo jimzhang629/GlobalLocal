@@ -301,11 +301,26 @@ def _brain_window_size(hemi: str, panel: int = BRAIN_PANEL_SIZE) -> tuple:
     return (panel * (2 if hemi == 'split' else 1), panel)
 
 
+def resolve_brain_zoom(hemi: str, zoom: float = None) -> float:
+    """The zoom factor a figure should end up at, given ``hemi`` and a request.
+
+    ``None`` means "use the default for this layout": ``BRAIN_SPLIT_ZOOM`` for
+    ``hemi='split'`` (the margin that keeps the two hemispheres apart) and 1 --
+    MNE's own auto-fit framing -- for every single-panel layout.
+    """
+    return float(zoom) if zoom is not None else (
+        BRAIN_SPLIT_ZOOM if hemi == 'split' else 1.)
+
+
 def zoom_brain_panels(fig: Brain, zoom: float) -> None:
     """Zoom every panel of ``fig`` by ``zoom``; below 1 pulls the camera back.
 
     Cameras are per-subplot, so a split figure needs both of them visited --
     zooming the active panel alone leaves the other one untouched.
+
+    Relative to whatever the cameras are pointing at *now*, so it is not
+    idempotent on its own; call :func:`apply_brain_zoom` instead when the figure
+    may already have been zoomed.
     """
     plotter = getattr(fig, 'plotter', None)
     if plotter is None or not zoom or float(zoom) == 1.:
@@ -323,6 +338,33 @@ def zoom_brain_panels(fig: Brain, zoom: float) -> None:
               f"({type(exc).__name__}: {exc})")
 
 
+def apply_brain_zoom(fig: Brain, zoom: float) -> None:
+    """Re-frame every panel of ``fig`` at ``zoom``, AFTER its electrodes exist.
+
+    Zooming once when the window is built does not survive: ``Brain.add_foci``
+    finishes each panel it touches with ``_set_camera(distance='auto',
+    focalpoint='auto')``, which recomputes the camera from the visible bounds
+    and throws away any earlier ``camera.zoom()``. So the first electrode drawn
+    silently undid the margin that ``hemi='split'`` needs, and the two
+    hemispheres came back edge to edge no matter what ``BRAIN_ZOOM`` said --
+    a split figure that reads as the single-brain 'both' view.
+
+    Resetting the cameras to that same auto-fit state first makes this
+    idempotent, so it is safe to call after every batch of foci: the framing
+    depends only on ``zoom``, not on how many batches there were.
+    """
+    if not zoom or float(zoom) == 1.:
+        return                       # 1 IS the auto-fit MNE already left us at
+    reset_view = getattr(fig, 'reset_view', None)
+    if callable(reset_view):
+        try:
+            reset_view()             # known baseline: the zoom is absolute now
+        except Exception as exc:     # pragma: no cover - backend dependent
+            print(f"could not reset the brain cameras before zooming "
+                  f"({type(exc).__name__}: {exc})")
+    zoom_brain_panels(fig, zoom)
+
+
 def _new_brain(subject: str, subj_dir: PathLike, hemi: str = 'both',
                surface: str = 'pial', transparency: float = 0.5,
                background: str = 'white', units: str = 'm', show: bool = True,
@@ -335,12 +377,10 @@ def _new_brain(subject: str, subj_dir: PathLike, hemi: str = 'both',
     """
     if fig_size is None:
         fig_size = _brain_window_size(hemi)
-    if zoom is None:
-        zoom = BRAIN_SPLIT_ZOOM if hemi == 'split' else 1.
     fig = Brain(subject, subjects_dir=subj_dir, cortex='low_contrast',
                 alpha=transparency, background=background, surf=surface,
                 hemi=hemi, units=units, show=show, size=fig_size)
-    zoom_brain_panels(fig, zoom)
+    apply_brain_zoom(fig, resolve_brain_zoom(hemi, zoom))
     return fig
 
 
@@ -400,7 +440,9 @@ def plot_on_average(sigs: Signal | str | mne.Info | list[Signal | str, ...],
     zoom: float, optional
         Camera zoom applied to every panel; below 1 zooms out. By default
         ``BRAIN_SPLIT_ZOOM`` when ``hemi='split'`` (which separates the two
-        hemispheres) and 1 otherwise. Ignored when ``fig`` is given.
+        hemispheres) and 1 otherwise. Re-applied after the electrodes are
+        drawn -- ``add_foci`` resets the cameras -- so it takes effect whether
+        or not this call is the one that built ``fig``.
 
     Returns
     -------
@@ -484,8 +526,13 @@ def plot_on_average(sigs: Signal | str | mne.Info | list[Signal | str, ...],
         plot_subj(new, subj_dir, these_picks, False, fig=fig,
                   trans=trans, color=this_color, size=size,
                   labels_every=label_every, hemi=hemi, background=background,
-                  show=show)
+                  show=show, zoom=zoom)
 
+    # Every ``add_foci`` above re-framed the panels it touched at MNE's
+    # auto-fit distance, so the zoom has to be (re)applied here, once the
+    # electrodes are in. Idempotent, so callers that add more sets on top of
+    # this same ``fig`` just land on the same framing again.
+    apply_brain_zoom(fig, resolve_brain_zoom(hemi, zoom))
     return fig
 
 
@@ -614,6 +661,8 @@ def plot_subj_sig_and_nonsig(inst: Signal | mne.Info | str, subj_dir: PathLike =
         sig_info = mne.pick_info(info, sig_picks)
         _plot_electrodes(fig, sig_info, hemi, sig_color, size, trans)
 
+    # after the foci, which reset the cameras -- see ``apply_brain_zoom``
+    apply_brain_zoom(fig, resolve_brain_zoom(hemi, zoom))
     return fig
 
 def _plot_electrodes(fig, info, hemi, color, size, trans):
@@ -743,6 +792,8 @@ def plot_subj(inst: Signal | mne.Info | str, subj_dir: PathLike = None,
         _add_labels(fig, info, sub, labels_every, hemi,
                     (left, right), **settings)
 
+    # after the foci, which reset the cameras -- see ``apply_brain_zoom``
+    apply_brain_zoom(fig, resolve_brain_zoom(hemi, zoom))
     return fig
 
 

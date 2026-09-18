@@ -559,7 +559,7 @@ SCORES_CSV="$SEG_DIR/electrodes.csv" \
 PER_SPLIT_CSV="$SEG_DIR/per_split.csv" \
 ROI_FILTER='' ANAT_LEVEL=group \
 MIN_SUBJECTS=3 N_PERM=10000 SEED=0 \
-MAKE_BRAIN=1 BRAIN_HEMI=both USE_COORDS=1 \
+MAKE_BRAIN=1 BRAIN_HEMI=split USE_COORDS=1 \
   bash submit_stability_flexibility_anatomy_dcc.sh
 ```
 
@@ -567,6 +567,15 @@ Environment variables not explicitly repeated in the submitter's
 `--export=...` list still reach Slurm through `--export=ALL`; the shell-prefix
 form above is therefore intentional. Use absolute CSV paths because the batch
 job's working directory may differ.
+
+A shell-prefixed value **wins over the submitter's own default**: every knob in
+`submit_stability_flexibility_anatomy_dcc.sh` is written `VAR=${VAR:-default}`,
+so `BRAIN_HEMI=both bash submit_...sh` still renders `both` no matter what that
+file says, and so does a `BRAIN_HEMI` already exported in the shell. Editing the
+default and prefixing a different value at the same time is the usual reason a
+hemisphere change appears to have been ignored. The submitted value is echoed in
+the job log (`Brain figure: yes (hemi=..., zoom=...)`) and recorded per map in
+`score_anatomy.json` — check there before concluding the setting did nothing.
 
 The score-CSV route does not load epochs. It still needs the electrode atlas and,
 for coordinate/centre panels, reconstruction files. Set `ROI_DICT_DIR` if the
@@ -705,8 +714,16 @@ In `scores_with_anatomy.csv`, check:
 | `score_map_<value>_by_roi.png` | fallback only when the surface cannot render |
 
 Depending on `BRAIN_HEMI` and the rendering helper, additional view-specific
-files may accompany the combined map. `score_anatomy.json` records the combined
-path actually returned, or the fallback path.
+files may accompany the combined map. `score_anatomy.json` records one entry per
+map — `path` (the combined figure, or the fallback), `hemi` and `zoom` (the
+layout it was actually drawn with) and `fallback` (true when the surface stack
+was unavailable and the by-ROI figure was written instead). Read `hemi` there to
+confirm a `BRAIN_HEMI` change took effect rather than judging it from the PNG.
+
+`score_map_<value>.png` is deleted before each render attempt, so a run whose
+surface render falls back leaves no figure rather than the previous run's. A
+missing PNG next to a `score_map_<value>_by_roi.png` means this run fell back;
+check the job log for the `[A3] brain-surface render unavailable` line.
 
 ### 10.5 Centre table
 
@@ -802,7 +819,7 @@ If it is null with a poor ceiling:
 | `SEED` | `0` | Reproducibility of permutations and plot jitter. |
 | `USE_COORDS` | `1` | Controls coordinate test and centres, not the primary ROI test. |
 | `MAKE_BRAIN` | `1` | Controls five surface/fallback maps, not statistics. |
-| `BRAIN_HEMI` | `both` | Display choice (`both`, `lh`, `rh`, `split`). `split` draws one hemisphere per panel in a window twice as wide. |
+| `BRAIN_HEMI` | `both` | Display choice (`both`, `lh`, `rh`, `split`). `split` draws one hemisphere per panel in a window twice as wide. Rejected with an error if it is not one of those four, so a typo fails the job instead of quietly rendering `both`. |
 | `BRAIN_ZOOM` | renderer default | Per-panel camera zoom (`<1` zooms out). Display choice only; lower it to widen the gap between the `split` hemispheres. |
 | `ELECTRODES` | runner `all`, submitter `sig` | CSV route inherits its input population; in-job scoring must be changed to `all` for N4. |
 

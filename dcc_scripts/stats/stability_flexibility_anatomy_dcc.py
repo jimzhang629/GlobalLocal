@@ -297,7 +297,8 @@ def write_summary(labels_with_roi, coverage, enrich, save_dir, meta,
             lines.append(f"brain figure: NOT rendered ({brain.get('error')}); "
                          f"wrote {brain.get('combined')} instead")
         else:
-            lines.append(f"brain figure: {brain.get('combined')}")
+            lines.append(f"brain figure: {brain.get('combined')}  "
+                         f"(hemi={brain.get('hemi')}, zoom={brain.get('zoom')})")
             for g, path in (brain.get('per_group') or {}).items():
                 lines.append(f"      {g}: {path}")
 
@@ -752,7 +753,13 @@ def run_score_anatomy(args):
         scatter_correlation=dict(corr=scatter_diag['corr'],
                                  corr_within_subject=scatter_diag['corr_within_subject'],
                                  flags=scatter_diag['flags']),
-        maps={k: v.get('combined') for k, v in maps.items()})
+        # path PLUS the layout it was actually drawn with: 'fallback' tells a
+        # brain figure from the degraded by-ROI one, and 'hemi'/'zoom' say which
+        # BRAIN_HEMI/BRAIN_ZOOM the run really used — the only way to check a
+        # figure's hemisphere layout without eyeballing the PNG.
+        maps={k: dict(path=v.get('combined'), hemi=v.get('hemi'),
+                      zoom=v.get('zoom'), fallback=v.get('fallback'))
+              for k, v in maps.items()})
     with open(os.path.join(save_dir, 'score_anatomy.json'), 'w') as f:
         json.dump(summary, f, indent=2, default=str)
 

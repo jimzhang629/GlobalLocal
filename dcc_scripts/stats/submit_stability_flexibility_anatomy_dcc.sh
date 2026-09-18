@@ -94,7 +94,12 @@ HIST_TOP_N=${HIST_TOP_N:-}               # cap the Destrieux histogram at N labe
 # Brain figure (needs mne + pyvista + the recon templates; falls back to the
 # ROI histogram when they're missing).
 MAKE_BRAIN=${MAKE_BRAIN:-1}
-BRAIN_HEMI=${BRAIN_HEMI:-both}   # both | lh | rh | split
+# both | lh | rh | split. Like every knob here this is only a DEFAULT: a value
+# prefixed on the command line (BRAIN_HEMI=both bash submit_...sh) or already
+# exported in the shell wins over whatever is written below, which is the usual
+# reason an edit here looks like it was ignored. The submitted value is echoed
+# below and again in the job log ("Brain figure: yes (hemi=..., zoom=...)").
+BRAIN_HEMI=${BRAIN_HEMI:-both}
 # Per-panel camera zoom; <1 zooms out. Blank keeps the renderer's default, which
 # already separates the two 'split' panels; lower it (e.g. 0.6) to push the
 # hemispheres further apart, raise it to 1 to fill each panel.
@@ -113,6 +118,7 @@ ROI_DICT_DIR=${ROI_DICT_DIR:-"/hpc/home/$USER/coganlab/$USER/GlobalLocal/src/ana
 mkdir -p out
 
 echo "Submitting stability/flexibility A3 anatomy (source=$DATA_SOURCE, arm=$ARM, labels=$LABEL_SOURCE, roi=${ROI_FILTER:-wholebrain}, contrast=$CONTRAST_MODE, fdr=$FDR_CORRECTION)"
+echo "  brain figure: make=$MAKE_BRAIN hemi=$BRAIN_HEMI zoom=${BRAIN_ZOOM:-default}"
 sbatch --job-name="sf_anatomy_${LABEL_SOURCE}_${DATA_SOURCE}" \
     --export=ALL,EPOCHS_ROOT_FILE="$EPOCHS_ROOT_FILE",WINDOW_TMIN="$WINDOW_TMIN",WINDOW_TMAX="$WINDOW_TMAX",ELECTRODES="$ELECTRODES",DATA_SOURCE="$DATA_SOURCE",SYNTHETIC_ENRICHMENT="$SYNTHETIC_ENRICHMENT",ARM="$ARM",SCORES_CSV="$SCORES_CSV",PER_SPLIT_CSV="$PER_SPLIT_CSV",N_SPLITS="$N_SPLITS",USE_COORDS="$USE_COORDS",LABEL_SOURCE="$LABEL_SOURCE",PT_RUN_DIR="$PT_RUN_DIR",PT_RUN_CPC="$PT_RUN_CPC",PT_RUN_SPS="$PT_RUN_SPS",PT_RUN_CPS="$PT_RUN_CPS",PT_RUN_SPC="$PT_RUN_SPC",PT_CORRECTION="$PT_CORRECTION",PT_ALPHA="$PT_ALPHA",PT_ROI="$PT_ROI",ROI_FILTER="$ROI_FILTER",ANAT_LEVEL="$ANAT_LEVEL",HIST_TOP_N="$HIST_TOP_N",MAKE_BRAIN="$MAKE_BRAIN",BRAIN_HEMI="$BRAIN_HEMI",BRAIN_ZOOM="$BRAIN_ZOOM",ALPHA="$ALPHA",CONTRAST_MODE="$CONTRAST_MODE",FDR_CORRECTION="$FDR_CORRECTION",MIN_SUBJECTS="$MIN_SUBJECTS",N_PERM="$N_PERM",SEED="$SEED",ROI_DICT_DIR="$ROI_DICT_DIR" \
     sbatch_stability_flexibility_anatomy_dcc.sh

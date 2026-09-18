@@ -195,7 +195,14 @@ HIST_TOP_N = int(_top_n) if _top_n else None
 
 # --- brain figure ---
 MAKE_BRAIN = _env('MAKE_BRAIN', '1') not in ('0', 'false', 'False')
-BRAIN_HEMI = _env('BRAIN_HEMI', 'both')   # 'both' | 'lh' | 'rh' | 'split'
+# 'both' | 'lh' | 'rh' | 'split'. Validated here rather than left to the
+# renderer: an unrecognised value only raises deep inside mne, where the brain
+# figure's try/except swallows it and quietly writes the degraded by-ROI figure
+# instead -- so a typo reads as "the hemisphere setting was ignored".
+BRAIN_HEMI = _env('BRAIN_HEMI', 'both')
+if BRAIN_HEMI not in ('both', 'lh', 'rh', 'split'):
+    raise ValueError(f"BRAIN_HEMI must be one of both|lh|rh|split; "
+                     f"got {BRAIN_HEMI!r}")
 # Per-panel camera zoom; <1 zooms out. Blank uses the renderer's default, which
 # already zooms the two 'split' panels out far enough to keep the hemispheres
 # apart -- set it to push them further apart (0.6) or fill the panels (1.0).

@@ -35,8 +35,16 @@ class _Plotter:
 
 
 class _Brain:
-    def __init__(self, shape):
+    def __init__(self, shape, reset_view=True):
         self.plotter = _Plotter(shape)
+        self.resets = 0
+        if reset_view:
+            self.reset_view = self._reset_view
+
+    def _reset_view(self):
+        """``Brain.reset_view``: every panel back to the auto-fit camera."""
+        self.resets += 1
+        self.plotter.camera.zooms.clear()
 
 
 def test_split_gets_one_square_panel_per_hemisphere():
@@ -71,3 +79,40 @@ def test_zoom_survives_a_backend_without_panel_cameras():
     fig.plotter = _NoPanels((1, 2))
     jim_mri.zoom_brain_panels(fig, 0.7)          # warns, does not raise
     jim_mri.zoom_brain_panels(object(), 0.7)     # no plotter at all
+
+
+def test_split_defaults_to_the_margin_zoom_and_an_explicit_one_wins():
+    assert jim_mri.resolve_brain_zoom('split') == jim_mri.BRAIN_SPLIT_ZOOM
+    for hemi in ('both', 'lh', 'rh'):
+        assert jim_mri.resolve_brain_zoom(hemi) == 1.
+    assert jim_mri.resolve_brain_zoom('split', 0.5) == 0.5
+    assert jim_mri.resolve_brain_zoom('both', 0.5) == 0.5
+
+
+def test_applying_the_zoom_twice_lands_on_the_same_framing():
+    """It has to be safe to re-apply after every batch of electrodes.
+
+    ``Brain.add_foci`` re-frames each panel it touches at the auto-fit distance,
+    so the zoom has to be re-applied afterwards or it never reaches the saved
+    image. Resetting first is what keeps repeated calls from compounding into an
+    ever-smaller brain.
+    """
+    fig = _Brain((1, 2))
+    jim_mri.apply_brain_zoom(fig, 0.7)
+    jim_mri.apply_brain_zoom(fig, 0.7)
+    assert fig.resets == 2
+    assert fig.plotter.camera.zooms == [0.7, 0.7]     # one per panel, once
+
+
+def test_applying_a_no_op_zoom_leaves_the_cameras_alone():
+    for zoom in (None, 1.0, 0):
+        fig = _Brain((1, 2))
+        jim_mri.apply_brain_zoom(fig, zoom)
+        assert fig.resets == 0
+        assert fig.plotter.camera.zooms == []
+
+
+def test_applying_the_zoom_survives_a_figure_without_reset_view():
+    fig = _Brain((1, 2), reset_view=False)
+    jim_mri.apply_brain_zoom(fig, 0.7)               # warns nothing, just zooms
+    assert fig.plotter.camera.zooms == [0.7, 0.7]

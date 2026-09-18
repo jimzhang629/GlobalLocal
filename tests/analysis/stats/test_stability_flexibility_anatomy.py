@@ -548,3 +548,121 @@ def test_score_map_falls_back_to_the_by_roi_figure_without_the_surface_stack(
         assert os.path.exists(out['combined'])
     else:
         assert os.path.exists(str(tmp_path / 'delta_map.png'))
+
+
+# ---------------------------------------------------------------------------
+# the brain figure's hemisphere layout
+# ---------------------------------------------------------------------------
+# `_render_electrode_sets` pulls the renderer in lazily, so the surface stack can
+# be replaced with a recorder and the whole hemi/zoom path exercised off-cluster.
+@pytest.fixture
+def fake_renderer(monkeypatch):
+    """Stand in for pyvista + jim_mri + the screenshot helper; records the calls."""
+    import sys
+    import types
+
+    calls = dict(plots=[], zooms=[], saved=[])
+
+    pv = types.ModuleType('pyvista')
+    pv.OFF_SCREEN = False
+    pv.start_xvfb = lambda: None
+    pv.global_theme = types.SimpleNamespace(allow_empty_mesh=True)
+    monkeypatch.setitem(sys.modules, 'pyvista', pv)
+
+    class _Fig:
+        def close(self):
+            pass
+
+    jim_mri = types.ModuleType('src.analysis.vis.jim_mri')
+
+    def plot_on_average(sigs, **kwargs):
+        calls['plots'].append(kwargs)
+        # what mne actually does: every add_foci re-frames the panels it touches
+        # at the auto-fit distance, throwing away any zoom applied before it.
+        calls['zooms'].append('reset-by-add_foci')
+        return _Fig()
+
+    def apply_brain_zoom(fig, zoom):
+        calls['zooms'].append(zoom)
+
+    def resolve_brain_zoom(hemi, zoom=None):
+        return float(zoom) if zoom is not None else (0.7 if hemi == 'split' else 1.)
+
+    jim_mri.plot_on_average = plot_on_average
+    jim_mri.apply_brain_zoom = apply_brain_zoom
+    jim_mri.resolve_brain_zoom = resolve_brain_zoom
+    monkeypatch.setitem(sys.modules, 'src.analysis.vis.jim_mri', jim_mri)
+
+    vis = types.ModuleType('dcc_scripts.vis.plot_sig_electrodes_dcc')
+    vis.electrodes_to_global_indices = lambda by_subject, offsets: [1, 2, 3]
+
+    def save_brain_image(fig, path):
+        calls['saved'].append(path)
+        with open(path, 'w') as f:
+            f.write('png')
+        return True
+
+    vis.save_brain_image = save_brain_image
+    monkeypatch.setitem(sys.modules, 'dcc_scripts.vis.plot_sig_electrodes_dcc', vis)
+
+    monkeypatch.setattr(sfa, '_looks_blank', lambda path: False)
+    monkeypatch.setattr(sfa, '_fsaverage_index_space',
+                        lambda subjects: ({}, list(subjects)))
+    return calls
+
+
+def test_score_map_renders_with_the_requested_hemisphere_layout(
+        planted_scores, fake_renderer, tmp_path):
+    """BRAIN_HEMI has to reach every one of the five maps, delta included."""
+    tab, cover = planted_scores(0.8)
+
+    out = sfa.plot_score_maps(tab, str(tmp_path), subjects=['S00'], hemi='split',
+                              coverage=cover)
+
+    assert set(out) == {'lwpc_s', 'lwps_s', 'abs_lwpc', 'abs_lwps', 'delta'}
+    assert not out['delta']['fallback']
+    # recorded on the result, so score_anatomy.json can be audited without the PNG
+    assert all(m['hemi'] == 'split' for m in out.values())
+    assert {c['hemi'] for c in fake_renderer['plots']} == {'split'}
+
+
+def test_the_split_zoom_is_re_applied_after_the_last_electrode_batch(
+        planted_scores, fake_renderer, tmp_path):
+    """The zoom must land between the final add_foci and the screenshot.
+
+    ``Brain.add_foci`` finishes by re-setting each panel's camera at the auto-fit
+    distance, so a zoom applied only when the window was built is gone by the
+    time anything is drawn -- which left the two ``split`` hemispheres edge to
+    edge, reading as the single-brain 'both' view.
+    """
+    tab, cover = planted_scores(0.8)
+
+    sfa.plot_scores_on_brain(tab, str(tmp_path / 'delta_map.png'),
+                             value_col='delta', subjects=['S00'], hemi='split',
+                             coverage=cover)
+
+    zooms = fake_renderer['zooms']
+    assert zooms[-1] == pytest.approx(0.7)       # ...and nothing resets it after
+    assert 'reset-by-add_foci' in zooms          # the reset really did happen
+    # an explicit BRAIN_ZOOM wins over the split default
+    fake_renderer['zooms'].clear()
+    sfa.plot_scores_on_brain(tab, str(tmp_path / 'delta_map.png'),
+                             value_col='delta', subjects=['S00'], hemi='split',
+                             coverage=cover, zoom=0.5)
+    assert fake_renderer['zooms'][-1] == pytest.approx(0.5)
+
+
+def test_a_failed_render_does_not_leave_the_previous_brain_figure_behind(
+        planted_scores, tmp_path):
+    """Otherwise a rerun with a new BRAIN_HEMI silently shows the old figure."""
+    tab, cover = planted_scores(0.8)
+    stale = tmp_path / 'delta_map.png'
+    stale.write_text('last run, hemi=both')
+
+    # no surface stack here, so the render raises and the by-ROI figure is written
+    out = sfa.plot_scores_on_brain(str(tab) and tab, str(stale), value_col='delta',
+                                   coverage=cover)
+
+    assert out['fallback'], "this test only means anything on the degraded path"
+    assert not stale.exists()
+    assert out['combined'].endswith('_by_roi.png')
