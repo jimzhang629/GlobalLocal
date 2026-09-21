@@ -917,6 +917,24 @@ LWPC on disjoint trial halves A and B, `yA`/`yB` = LWPS on the same halves) and
 the pipeline's own `summary.txt`. Permutation p-values, 20 000 permutations
 unless stated.
 
+⚠️ **Provenance — not everything here came from the pipeline.** Three classes of
+number appear below and they do not carry equal weight:
+
+| source | results | status |
+|---|---|---|
+| the pipeline's own run (`summary.txt`) | ROI omnibus, `delta ~ coords` incl. the z slope, medoids, the ceiling | archived, reproducible |
+| repo functions called directly (`relative_score_coordinate_test`, `relative_score_roi_test`, `score_centers_per_subject`, `map_reliability`, `prepare_continuous`/`subject_clustered_corr`) | subset and robustness tests, centre variants, correlations | repo code, tested |
+| **ad-hoc analysis scripts, NOT in the codebase** | **cross-validated slope replication (§15.5), cross-validated μ² magnitude test (§15.7), concordance decomposition (§15.7), disjoint-half correlation check (§15.4)** | **unreviewed, untested, not reproducible from this repo** |
+
+The third row is the important caveat. Those analyses reuse the repo's
+regression and null machinery, but the estimators themselves — E[xA·xB] for μ²,
+and E[slope_A · slope_B] for the gradient — were written ad hoc for this
+write-up. They have no unit tests and were never validated against the
+`_synthetic_per_split` ground-truth harness the rest of this module uses. Treat
+them as strong indications, not as pipeline results, until they are implemented
+and tested in `stability_flexibility_anatomy.py`. See
+[§15.9](#159-what-to-do-next).
+
 ### 15.1 Takeaway
 
 **Two results, both now confirmed against the split-half data, and one question
@@ -1272,7 +1290,16 @@ The three analyses the previous revision listed as blocking are **done**
    §15.5 splits *trials*, so it controls trial noise but not subject sampling;
    leave-one-subject-out (21/22 folds) is reassuring but is not a held-out test.
    Deliberately not run — revisit if a reviewer asks.
-4. **Keep the multiplicity caveat.** z was one of three axes. The block F
+4. **Move the ad-hoc estimators into the codebase.** The cross-validated
+   slope replication (§15.5) and the cross-validated μ² magnitude test (§15.7)
+   are the evidence for "the gradient is real" and "the magnitude hypothesis is
+   dead" respectively, and neither is in the repo or covered by a test. Both
+   should become functions in `stability_flexibility_anatomy.py` with tests
+   against `_synthetic_per_split` — a planted magnitude gradient the μ² test
+   must recover, and a null case neither may manufacture significance on. Until
+   then the two strongest claims in this section rest on unreviewed code.
+
+5. **Keep the multiplicity caveat.** z was one of three axes. The block F
    (p = 0.032) is the protected headline; Bonferroni over three axes puts the
    z slope at 0.0225.
 
