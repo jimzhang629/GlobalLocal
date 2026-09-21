@@ -22,6 +22,15 @@ gamma carries both adaptation effects → decoding shows distributed lPFC activi
 carries information about each adaptation → anatomy asks whether the two effects
 are organized differently across cortex.
 
+> **Updated 2026-09 with the lPFC anatomy result.** C4 has an answer, and it is
+> *shared population with a graded bias*, not a dissociation
+> ([`n4_continuous_anatomy.md`](n4_continuous_anatomy.md) §15, §17). This
+> changes the ending: the paper does not close on "the two effects live in
+> different places". It closes on **one population carrying both, with a modest
+> dorsoventral shift in which dominates** — which is a stronger and more
+> constraining claim, because the noise ceiling makes it positive evidence
+> rather than a failure to find a difference.
+
 **Organize figures by claim, not by measure.** Power and decoding for the same
 claim belong in the same figure.
 
@@ -32,7 +41,18 @@ claim belong in the same figure.
 | C1 | Stability and flexibility are regulated **concurrently in behavior** | F1 |
 | C2 | lPFC high gamma carries **both adaptation effects**, in the expected directions | F3 |
 | C3 | **Distributed lPFC activity carries decodable information about each adaptation**, including information no single electrode supplies | F4 |
-| C4 | The two adaptation effects are **(not) organized differently across lPFC**, conditioned on coverage and read against a noise ceiling | F5 |
+| C4 | The two adaptation effects are carried by a **shared lPFC population** — correlated at their spatial noise ceiling — with a small, cross-validated **dorsoventral shift in which effect dominates**, conditioned on coverage | F5 |
+
+C4 splits into two sub-claims that must stay in proportion, because the second
+reads as a retraction of the first if it leads:
+
+- **C4a (the finding).** Whatever is reliably mapped is essentially common to
+  both effects. Positive evidence, licensed by the ceiling — not a null.
+- **C4b (the qualifier).** On top of that shared substrate, the *balance* shifts
+  dorsoventrally: LWPS-dominant dorsally, LWPC-dominant ventrally, ≈ 0.16–0.21
+  Cohen's *d* across the dorsoventral extent of coverage. A **reordering**, not a
+  magnitude difference — both signals are present throughout at comparable
+  strength.
 
 **"Independent" is a behavioral word in this paper — and now it is barely used at
 all.** C1 is a concurrency claim, not an independence claim. For the neural
@@ -104,12 +124,33 @@ split, on every trial.
 ## Main-text sequence
 
 ### F1 — Task, manipulation, behavior *(C1)*
-`a` paradigm · `b` 2×2 block proportion manipulation · `c` RT · `d` error rate.
+`a` paradigm · `b` 2×2 block proportion manipulation · `c` RT · `d` error rate ·
+`e` **the estimand schematic**.
 
 Unchanged, except in emphasis: the point is that **both adaptations are present
 in the same subjects and the same sessions** — concurrent regulation. The absent
 behavioral cross-effects belong in the text as scope (and in S4), not as a
 visual centrepiece.
+
+**Panel `e` is new and it earns its space.** The tested quantity is a difference
+of difference-of-differences, modulated by location — four levels, and readers
+notice ([`n4_continuous_anatomy.md`](n4_continuous_anatomy.md) §18). A schematic
+kills that objection visually in a way prose cannot. Four small cells, left to
+right:
+
+```text
+2×2 cell means  →  one bar: STABILITY score  →  2×2 cell means  →  one bar: FLEXIBILITY score
+(congruency ×                                   (switch type ×
+ incong. proportion)                             switch proportion)
+
+                    ... then the two bars side by side, gap labelled "balance"
+```
+
+Once the reader has seen that each effect collapses to *one bar*, the anatomy
+analysis is "does the gap between two bars depend on location" — which nobody
+finds confusing. The arithmetic goes in Methods and never appears in the main
+text. Keep the panel undecorated (no axes, no legend, shared style) so it reads
+as a schematic and not as a fifth result.
 
 ### F2 — Coverage and signal validation
 `a` all electrodes on the MNI surface, colored by ROI · `b` per-electrode HG
@@ -164,6 +205,37 @@ which is what makes `c` readable in either direction**.
 Haufe-transformed decoder patterns go in the supplement as convergent evidence,
 labelled as such (plan §8.3: PCA blurs the back-projection, so it is weaker
 evidence about anatomy than the per-electrode maps).
+
+**Now that the lPFC run has landed, the panel order is the claim order — and it
+is not the order above.** The result is a *shared population with a dorsoventral
+bias*, not a dissociation ([`n4_continuous_anatomy.md`](n4_continuous_anatomy.md)
+§17). Panel `d` is therefore the lead, not the caboose:
+
+| panel | content | why here |
+|---|---|---|
+| `a` | **the ceiling**: split-half reliability of each map beside the disjoint-half between-effect correlation | This is the strongest claim in the paper and a *positive* one — the maps are correlated at their ceiling. Everything after it is a qualifier. |
+| `b` | joint scatter, `lwpc_s` × `lwps_s`, with the pooled and within-subject *r* | Shows the shared population directly; the **positive** correlation is what rules out a competitive/anticorrelated tradeoff. |
+| `c` | **the gradient as a proportion**: % LWPC-dominant electrodes against MNI z | 55 % ventral → 40 % dorsal. No subtractions and no negative numbers on display (§18.2 move 3). |
+| `d` | the coverage-conditioned parcel test with the swap null | The omnibus. Label it as the omnibus; **no parcel survives FDR**, so do not annotate a driver. |
+
+Two presentation rules that follow from the result:
+
+- **Never draw `a`/`b` of the old order as two thresholded dot maps side by
+  side.** At the observed marginal rates, independence alone leaves only ~28 % of
+  electrodes in both maps, so they will *look* disjoint whether or not they are
+  — and the paper's claim is that they are not. If the signed surfaces appear at
+  all, they appear unthresholded and on a shared scale, captioned as display.
+- **Present the gradient on a diverging LWPS-dominant ←→ LWPC-dominant scale**,
+  or as the proportion in `c`. A sequential scale invites the magnitude reading,
+  which is a settled null (§15.7).
+
+Optional annotation on `c`: the §15.8 **sign-defined centres** (mean z of
+`delta > 0` vs `delta < 0` electrodes, within subject × hemisphere, Δz =
+−1.83 mm). Label it descriptive — the sets are defined by the sign of the
+modelled quantity, so testing their separation would be circular. Do **not** use
+the pipeline's `score_centers.csv` medoids: they weight by `|score|` and are
+structurally blind to a signed dissociation, and 6 of 25 groups return exactly
+zero displacement.
 
 ### Timing — fold in or drop
 `a` LWPC vs. LWPS interaction onsets, each normalized to its own peak (the
@@ -239,6 +311,46 @@ Either way you are answering from evidence rather than hand-waving, which is the
 entire point. Do not put the *current* low-band results in the supplement — a
 reviewer who spots the 0.5 s baseline will discount the whole supplement.
 
+### "Your anatomical outcome is four levels of subtraction deep"
+
+It is, and the count is worth conceding openly:
+conflict effect → LWPC (a difference of differences) → `delta` (LWPC − LWPS) →
+tested for modulation by location. Full treatment in
+[`n4_continuous_anatomy.md`](n4_continuous_anatomy.md) §18; the short answer is
+that **only one of those layers is a choice**:
+
+- Levels 1–2 are **definitional**. LWPC *is* a difference of differences; a
+  reviewer objecting there is objecting to the existence of the list-wide
+  proportion congruency effect.
+- Level 4 is **the research question**.
+- Level 3 — `delta` — is **a correction, not an elaboration.** The "simpler"
+  alternative (map each effect, compare where each is significant) is shorter to
+  describe and *invalid*, because a difference between a significant and a
+  non-significant effect is not itself significant. Forming the within-electrode
+  difference is the minimum analysis that licenses the anatomical claim.
+
+Cite the interaction fallacy in Methods and the exchange inverts: you are not
+defending complexity, they are defending an invalid shortcut.
+
+The legitimate version of this objection is *"nested contrasts compound
+variance — is this noise?"* Answer it with numbers, not reassurance: measured
+split-half reliability, 98.5 % sign agreement when the gradient is refit on
+disjoint trial halves, ~91 % of the observed slope recovered as signal. **F5`a`
+exists to make this visible before anyone has to ask.**
+
+### "The two maps look separate to me"
+
+They will, and that is the point of F5`a`. At marginal positive rates of 49 % and
+56 %, statistical independence alone leaves only ~28 % of electrodes in both
+thresholded maps — so *any* pair of imperfectly reliable maps looks disjoint when
+thresholded. With per-electrode reliability of ~0.18–0.30, a thresholded dot map
+here is largely noise.
+
+This is why the ceiling is a figure panel and not a supplementary number, and why
+no individual electrode is interpreted anywhere in the paper. Stated positively:
+the analysis measured how different the two maps *could* be given the precision
+available, and found them correlated at that limit.
+
 ## Compression points
 
 Five main figures (F1–F5). To adjust:
@@ -261,7 +373,9 @@ Five main figures (F1–F5). To adjust:
 | S6 | Haufe-transformed decoder patterns and their spatial comparison with the univariate maps |
 | S7 | Per-subject HG traces; demographics, electrode counts, exclusions |
 | S8 | Cross-decoding control table ([`cross_decoding_controls.md`](cross_decoding_controls.md) §7) for every transfer reported |
-| S9 | Descriptive within-subject centroids/medoids per hemisphere, with the within-electrode swap null |
+| S9 | Descriptive within-subject centroids per hemisphere, with the within-electrode swap null — report as an explicit null on every axis, and state that `abs`-weighted centres are structurally blind to a signed dissociation ([`n4_continuous_anatomy.md`](n4_continuous_anatomy.md) §15.8). Note the medoid degeneracy (6/25 groups return exactly zero displacement) rather than presenting medoid and centroid as interchangeable. |
+| S11 | The magnitude analyses, reported as a **settled negative**: `abs_lwpc − abs_lwps` and the unbiased cross-validated μ² difference (p = 0.40), with the rectification-bias argument for why `\|score\|` could not have answered it |
+| S12 | Anterior–posterior coordinate results as an explicit null (p = 0.58), noting that the centre machinery was built around this axis |
 | S10 | Per-trial-baseline robustness re-run of the power traces; direct block comparisons |
 
 ## Open items before this plan freezes
@@ -270,8 +384,17 @@ Five main figures (F1–F5). To adjust:
 2. Joint-cell trial counts (plan §4.4) — F4`c` stands or falls on the within-block
    ceiling.
 3. Implement the block-transfer splitter (plan §4.2) and its synthetic test.
-4. Implement the continuous-score anatomy arm (plan §5.3) and report the spatial
-   noise ceiling (plan §5.4) — F5`d`.
+4. ~~Implement the continuous-score anatomy arm (plan §5.3) and report the
+   spatial noise ceiling (plan §5.4).~~ **Done** — results in
+   [`n4_continuous_anatomy.md`](n4_continuous_anatomy.md) §15, and F5 is
+   reordered above to match what they say. One dependency remains: the archived
+   `summary.txt` predates the `map_reliability` fix, so **re-run the pipeline
+   before quoting any noise-corrected number** (§16).
 5. Re-run one low band with a longer, pre-block baseline before deciding what S3
    says.
 6. Check whether any control ROI clears threshold for the specificity analysis.
+7. Decide whether the held-out-**subject** confirmation of the dorsoventral
+   gradient is run before submission (§15.9 item 3). The existing
+   cross-validation splits trials, so it controls trial noise but not subject
+   sampling; LOSO (21/22 folds) is reassuring but is not a held-out test.
+   Currently deferred — revisit if a reviewer asks.

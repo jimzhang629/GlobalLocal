@@ -17,6 +17,14 @@ If you read only three things, read [the estimand](#2-the-estimand-and-sign-conv
 [the primary test](#4-the-primary-anatomical-test), and
 [the interpretation checklist](#11-interpretation-checklist).
 
+If you are **writing up the lPFC run** rather than running it, start at
+[§15 Findings](#15-findings-from-the-lpfc-run), then
+[§16](#16-reading-the-archived-summarytxt) (which blocks of the archived
+`summary.txt` are safe to quote — several are not),
+[§17](#17-what-the-result-means--discussion) (the Discussion claims and their
+limits), and [§18](#18-communicating-a-nested-estimand) (how to present a
+four-level estimand without the depth becoming the story).
+
 ---
 
 ## 0. The short version
@@ -1283,3 +1291,365 @@ LWPC-dominant** scale, add the §15.8 sign-defined centres as a labelled
 descriptive annotation, report §15.6 as an explicit null, and state §15.7 as a
 settled negative rather than an absence of evidence. Do not interpret individual
 electrodes anywhere ([§15.3](#153-how-reliable-are-the-maps)).
+
+[§16](#16-reading-the-archived-summarytxt) says which blocks of the archived
+`summary.txt` are safe to quote, [§17](#17-what-the-result-means--discussion)
+turns these findings into Discussion claims, and
+[§18](#18-communicating-a-nested-estimand) handles the "this is four levels deep"
+objection.
+
+---
+
+## 16. Reading the archived `summary.txt`
+
+The `summary.txt` in the archived lPFC run predates the `map_reliability` fix
+(§15.9 item 1). Until the pipeline is re-run, read it block by block:
+
+| Block in `summary.txt` | Verdict | Why |
+|---|---|---|
+| §5.2 PRIMARY `F = 1.895, p = 0.0104` | ✅ **quote as-is** | The primary result. 396 electrodes / 19 parcels / 22 subjects. |
+| per-anatomy table | ⚠️ **ordering only** | Omnibus is the claim; min `q` = 0.126, no row survives FDR. Read `mean_delta_adj`, never `mean_delta` (see below). |
+| §9.2 leverage | ✅ **quote as-is** | `F` = 1.59–2.38 across folds; the statistic never collapses. |
+| §5.2 SECONDARY coordinates | ✅ **quote, but read the right axis** | Block `F` = 2.872, p = 0.0302; **z** carries it (p = 0.0074), **y is null** (p = 0.5742). |
+| the `a POSITIVE mni_y slope` annotation | ⚠️ **generic boilerplate** | Printed every run regardless of result. This run's finding is on z, which the summary prints but does not annotate. |
+| §7 DESCRIPTIVE medoids | ❌ **do not report** | Tests `dy`, an axis that is null anyway; `abs` weighting is blind to a signed dissociation; 6/25 groups return exactly-zero displacement (§15.8). Use the §15.8 sign-defined centres instead. |
+| §5.4 `noise-corrected +1.374` / `+1.369` | ❌ **invalid** | Pre-fix Spearman artefact. Correct electrode-level value is **+1.022**, CI [0.998, 1.046]; the parcel-level ratio is **undefined** (LWPC parcel reliability −0.026). See §15.3. |
+| §5.4 `between` and the reliabilities | ✅ **quote** | +0.172 electrode / +0.275 parcel, against reliabilities of +0.162 / +0.097 (Spearman) or +0.178 / +0.163 (Pearson). |
+| §5.1 `min_elec` sweep | ❌ **uninterpretable, not a null** | `split_resolved_corr` residualises *and within-subject centres*; `map_reliability` does not. Centring removes most of the between-electrode variance at these per-subject counts. Also: 1→2 drops one subject and one electrode, 2→3 drops nothing — there is no sensitivity to observe. |
+| pooled `r = +0.316`, within-subject `+0.224` | ✅ **quote** | They agree, which licenses pooling (§5.1). |
+
+### 16.1 `mean_delta` versus `mean_delta_adj`
+
+`mean_delta_adj` is the mean of the **residualised** delta — the quantity the `F`
+actually uses — and is centred on ~zero across the sample by construction, since
+the subject dummies span the intercept. Two consequences:
+
+1. **The adjusted means are relative to the lPFC grand mean, not to absolute
+   zero.** The whole-sample mean `delta` is −0.147 (slightly LWPS-dominant
+   overall), so "LWPC-dominant parcel" means *LWPC-dominant relative to this
+   sample's average balance*.
+2. **Where raw and adjusted diverge, the raw mean was a subject artefact.**
+   `lh_S_front_inf` goes −0.506 → −0.010; `rh_G_front_inf-Orbital` goes −0.036 →
+   **+0.849** on 4 electrodes from 3 subjects. Those raw means were mostly
+   reporting *which subjects happened to be wired there*.
+
+### 16.2 Counts that look wrong but are not
+
+- **398 → 396 electrodes, 21 → 19 parcels.** `MIN_SUBJECTS=3` drops
+  `ctx_lh_Lat_Fis-ant-Vertical` and `ctx_lh_S_circular_insula_ant`, one subject
+  and one electrode each.
+- **The coordinate test uses all 398.** It does not coverage-filter, because it
+  has no parcel family to condition on.
+- **`[lh] F = 4.243, p = 0.0048` is not the dorsoventral result.** It is driven
+  by `mni_x` (p = 0.067), a within-left-hemisphere medial–lateral trend. The z
+  slope in that fit is p = 0.21. Do not quote the lh block `F` as support for
+  §15.5; quote the pooled block `F` and the `z × hemisphere` interaction test
+  (p = 0.65) instead.
+
+---
+
+## 17. What the result means — Discussion
+
+The lPFC run supports a **shared-population-with-a-bias** account, not a
+dissociation. The ordering below is the order the Discussion should make the
+claims in; leading with the gradient inverts the finding.
+
+### 17.1 The three claims, in descending strength
+
+**1. Shared population — the strongest claim, and a positive one.**
+
+This is what the noise ceiling was built to license and what most designs cannot
+say. The usual approach — two thresholded maps, compared by eye — cannot tell
+"different maps" from "same map, measured noisily". §15.3 measures the ceiling
+directly, so the claim is not *"we failed to find segregation"* but:
+
+> **We measured how different these maps could possibly be given our precision,
+> and the answer is essentially not at all.**
+
+**2. A dorsoventral bias in relative dominance — solid, but small.**
+
+Block `F` = 2.87 (p = 0.030), z slope −0.0077/mm (p = 0.0074), cross-validated
+across disjoint trial halves (98.5 % sign agreement, ~91 % of the slope is
+signal), stable in 21/22 LOSO folds, and independently corroborated by the
+parcel omnibus whose extremes order dorsoventrally (§17.3).
+
+**3. A reordering, not a magnitude effect — settled, and worth stating as such.**
+
+Neither effect's own sign varies with position; only their ordering does
+(§15.7). Combined with the unbiased magnitude test (p = 0.40, μ² = +0.300 LWPC
+vs +0.310 LWPS), the picture is: **both regulatory signals are present
+throughout lPFC at comparable strength; what shifts along the dorsoventral axis
+is which one wins.**
+
+### 17.2 What it argues for and against
+
+**Against modular segregation.** There is no "stability region" and "flexibility
+region" here — and §17.4 explains why prior work might have concluded otherwise.
+
+**Against a *competitive* implementation of the tradeoff.** This is the most
+constraining result in the run and the easiest to miss. "Stability–flexibility
+tradeoff" invites the reading that these are two ends of one seesaw: sites
+supporting shielding should be poor at switching. **That predicts a negative
+across-site correlation.** The observed correlation is **positive** (pooled
++0.32, within-subject +0.22, above-chance co-occurrence p = 0.0016, §15.4).
+Sites that engage in proportion-based regulation at all engage in **both kinds**
+of it. Whatever the behavioural tradeoff's status, it is **not implemented as
+anticorrelated neural populations in lPFC.**
+
+Two objections to preempt in the text:
+
+- *Does shared electrode SNR manufacture the positive correlation?* No. A shared
+  gain factor inflates a correlation of **magnitudes**; to inflate a correlation
+  of **signed** values it needs both effects to carry a substantial positive
+  mean. `lwpc_s` has a mean of +0.034 and is negative at 51 % of electrodes —
+  there is almost no positive mean for gain to multiply.
+- *Is responsiveness controlled?* Yes — it is a covariate in every model here and
+  is residualised inside `split_resolved_corr`. Say so explicitly.
+
+**For a shared substrate with graded weighting.** One population computing a
+regulatory signal, with dorsoventral position biasing how that signal is
+apportioned between conflict-shielding and switch-readiness demands. This sits
+naturally with mixed-selectivity accounts of PFC — sites carrying combinations
+of task variables rather than dedicated functions, with the gradient as a bias
+in the mixing weights rather than a boundary between modules. *(Supply the
+citations; §15.1's "mixed selectivity, not segregated subpopulations" is the
+frame.)*
+
+### 17.3 The direction is the convergent part
+
+Dorsal (superior frontal) → LWPS-dominant; ventral (middle/inferior frontal) →
+LWPC-dominant. The parcel adjusted means bear this out independently of the
+coordinate fit:
+
+| | value |
+|---|---|
+| corr(parcel mean MNI-z, parcel `mean_delta_adj`), unweighted | **−0.32** |
+| same, weighted by electrode count | **−0.44** |
+| mean `mean_delta_adj`, five most dorsal parcels | **−0.20** |
+| mean `mean_delta_adj`, five most ventral parcels | **+0.20** |
+
+That direction is broadly consistent with the conventional association of dorsal
+lPFC (bordering pre-SMA/FEF territory; task-set updating, action selection) with
+switching and of ventral lPFC (IFG; interference resolution, representational
+selection) with conflict control.
+
+> **The novelty is not the direction — it is that what prior work would describe
+> as two regions is here a graded bias within one shared population.**
+
+Frame it as a refinement of the existing picture rather than a contradiction of
+it, and cite the conventional dorsal/ventral distinction so the convergence is
+visible.
+
+### 17.4 The methodological contribution
+
+§15.4's arithmetic deserves main-text space, because it explains the prior
+literature:
+
+> At marginal positive rates of 49 % and 56 %, independence alone leaves only
+> ~28 % of electrodes in both thresholded maps.
+
+**Two thresholded dot maps will look disjoint whether or not the underlying
+populations differ.** With per-electrode reliability of ~0.18–0.30, apparent
+segregation in a thresholded map is not evidence of segregation — it is the
+expected appearance of *any* pair of noisy maps. This motivates the analysis
+choices (continuous scores, anatomically-defined electrode set, a within-electrode
+difference as the response, an explicit noise ceiling) as necessary rather than
+fussy, and it is the honest justification for refusing to interpret individual
+electrodes.
+
+### 17.5 The two nulls that are findings, not omissions
+
+- **The rostrocaudal axis is null** (p = 0.58). The most prominent organizational
+  account of lPFC is a rostrocaudal hierarchy of abstraction; this says the
+  stability–flexibility balance is organized on an **orthogonal** axis. Note that
+  the §8 centre machinery was aimed at this axis from the start (`p_anterior`),
+  which is part of why it is null.
+- **The magnitude hypothesis is settled, not unsupported.** Because it was tested
+  with an unbiased estimator (E[xA·xB] = μ²) rather than with `|score|` (noise
+  floor ≈ 0.8 σ for a null electrode), the sentence is *"settled negative"*, not
+  *"no evidence for"*. Those read very differently to a reviewer, and the
+  stronger one is earned.
+
+### 17.6 Limitations the Discussion has to carry
+
+- **lPFC only.** The stability–flexibility literature implicates striatal gating
+  heavily. The shared-population claim is about lPFC, not about the control
+  system. Say so.
+- **The gradient is small.** The z coverage spans 97.6 mm (−21.7 to +75.9;
+  73.9 mm between the 2.5th and 97.5th percentiles), so the −0.0077/mm slope is
+  **0.57–0.75 `delta` units end to end**. Since `lwpc_s`/`lwps_s` are Cohen's *d*
+  divided by that effect's across-electrode SD (0.279 and 0.269 here, §2.2), one
+  `delta` unit ≈ 0.28 *d*, putting the gradient at **≈ 0.16–0.21 Cohen's *d***.
+  Real, cross-validated, modest. Quote the range with the extent it is computed
+  over; do not let the text drift into "lPFC is organized dorsoventrally for
+  stability vs flexibility."
+- **Keep claims 1 and 2 in proportion.** The shared component is essentially all
+  the reliable variance; the gradient is a second-order bias on top of it. They
+  are not in tension (§15.5), but if the writing loses the proportion, claim 2
+  reads as a retraction of claim 1.
+- **One of three axes.** Block `F` (p = 0.032) is the protected headline;
+  Bonferroni over three axes puts the z slope at 0.0225 — still significant, so
+  state it rather than letting a reviewer raise it.
+- **Trial-level CV, not subject-level.** §15.5 splits trials, so it controls
+  trial noise but not subject sampling. LOSO (21/22) is reassuring but is not a
+  held-out test (§15.9 item 3).
+- **Clinical coverage.** 22 subjects, 1–55 electrodes each (median 14), coverage
+  determined by surgical need. Every anatomical claim is conditioned on
+  `coverage_matrix.csv`.
+- **Correlational.** Position predicts the bias; nothing here says position
+  causes it.
+
+### 17.7 Discussion skeleton
+
+1. Restate in one sentence — shared population, graded bias, reordering not
+   magnitude.
+2. **Shared population** — lead here; the ceiling makes it a positive claim.
+3. **Against a competitive tradeoff implementation** — the positive correlation
+   constrains models; preempt the SNR objection.
+4. **The dorsoventral bias** — direction, convergence with conventional
+   dorsal/ventral accounts, the reframe from "two regions" to "one population
+   with a bias". Keep proportionate to (2).
+5. **A reordering, not a magnitude effect** — use the P(`delta` > 0) framing.
+6. **The rostrocaudal null** — explicitly not the hierarchy axis.
+7. **Why thresholded maps mislead** — §17.4.
+8. **Limitations** — §17.6.
+9. **Forward** — held-out-subject confirmation; extension beyond lPFC,
+   especially striatum.
+
+⚠️ **The single biggest framing risk is leading with the gradient.** If §17.1
+claim 2 comes before claim 1, the paper reads as *"we found a dorsoventral
+dissociation between stability and flexibility"* — roughly the opposite of what
+the data say, and exactly the claim the noise ceiling was built to rule out.
+**The shared population is the finding; the gradient is the qualifier.**
+
+---
+
+## 18. Communicating a nested estimand
+
+`delta` is a difference of difference-of-differences, tested for modulation by
+location. That is four levels, and readers do notice. This section is how to
+present it without the depth becoming the story.
+
+### 18.1 Count the layers honestly, then say which are yours
+
+| | quantity | operation |
+|---|---|---|
+| 1 | conflict effect | incongruent − congruent |
+| 2 | **LWPC** | that effect, low-PC block − high-PC block |
+| 3 | **`delta`** | LWPC − LWPS |
+| 4 | the test | does `delta` vary with location |
+
+**Layers 1–2 are definitional, not analytic.** LWPC *is* a difference of
+differences; there is no such thing as "LWPC without the interaction". A reviewer
+objecting to layer 2 is objecting to the existence of the list-wide proportion
+congruency effect, not to this analysis. **Layer 4 is the research question.**
+
+**So layer 3 is the only added one — and it is a correction, not an elaboration:**
+
+> The "simpler" alternative is to map LWPC and LWPS separately and compare where
+> each is significant. That analysis is shorter to describe and **wrong**, because
+> the difference between a significant effect and a non-significant effect is not
+> itself significant. Testing the within-electrode difference is the **minimum**
+> analysis that licenses a claim about differential anatomical distribution.
+
+Put a sentence to that effect in Methods with the interaction-fallacy citation
+(Nieuwenhuis, Forstmann & Wagenmakers, 2011 — verify before submitting).
+Reviewers who recognise it will be on your side immediately. This reframes the
+exchange: you are not defending added complexity, you are pointing out that the
+intuitive alternative is the one that needs defending.
+
+### 18.2 Six moves that make the depth stop reading as depth
+
+**1. Describe the model term, not the arithmetic.**
+
+> ❌ "a difference of difference-of-differences"
+> ✅ "an effect-type × location interaction"
+
+Nobody blinks at "we tested a three-way interaction"; everybody blinks at "we
+subtracted a subtraction from a subtraction". Same quantity, different reception,
+because arithmetic descriptions always sound worse than model descriptions.
+**Never describe the arithmetic in the main text** — it belongs in Methods, once.
+
+**2. Call them *scores*, not contrasts.** Encapsulation is what kills the nesting:
+
+> Each electrode receives a **stability score** (how strongly its conflict effect
+> adapts to conflict frequency) and a **flexibility score** (how strongly its
+> switch effect adapts to switch frequency). We ask whether the **balance**
+> between them depends on location.
+
+Three sentences, zero visible nesting. This is how Cohen's *d* works: nobody
+objects that a t-test on *d* is "a test on a ratio of a difference to a pooled SD".
+*d* is a score with a name. Give these two quantities names and the same thing
+happens.
+
+**3. Report the headline as a proportion.** By tercile of MNI z (raw descriptive
+binning of the 398-electrode table):
+
+| | n | mean z | **% LWPC-dominant** |
+|---|---|---|---|
+| ventral | 133 | +2.9 | **54.9 %** |
+| mid | 132 | +26.7 | 45.5 % |
+| dorsal | 133 | +51.8 | **39.8 %** |
+
+It survives within-subject centring (52 % below vs 41 % above each subject's own
+mean z), so it is not a coverage artefact. Raw point-biserial r(`delta` > 0, z) =
+−0.108; the nuisance-adjusted value §15.7 tests is −0.144, p = 0.0058.
+
+> **The proportion of lPFC sites where stability regulation dominates falls from
+> 55 % ventrally to 40 % dorsally.**
+
+Zero subtractions visible, no negative numbers on display. This is the abstract
+sentence and probably the figure.
+
+**4. Convert the noise objection into a measured answer.** The legitimate worry
+behind "how many layers deep" is that nested contrasts compound variance. Most
+papers can only wave at this; §15.3 and §15.5 answer it — measured split-half
+reliability, 98.5 % sign agreement across disjoint trial halves, ~91 % of the
+slope as signal. **Lead with this rather than burying it**: it converts the
+biggest-looking liability into the strongest methodological claim.
+
+**5. One schematic figure panel.** Four small panels left to right: 2 × 2 cell
+means → one bar (stability score) → the other 2 × 2 → one bar (flexibility score)
+→ the two bars side by side with the gap labelled. Kills the objection visually in
+a way prose cannot. See [`figure_plan.md`](figure_plan.md) F1.
+
+**6. Fix the double negative in the sign convention.** Positive LWPC means the
+conflict effect is **smaller** in the high-proportion block — a subtraction where
+"more" means "less". A reader holding that inverted *while* tracking `delta` is
+lost regardless of how good the rest is. Define **adaptation** once, in words,
+with the direction stated, then use "adaptation score" throughout and never
+return to raw subtraction language.
+
+### 18.3 The two objections that will actually come
+
+**"Why not just compare |LWPC| vs |LWPS|? That's simpler."** `|score|` is a
+**biased** magnitude estimator — E|score| ≈ 0.8 σ for a null electrode, a pure
+noise floor. Tested with an unbiased estimator instead (E[xA·xB] = μ²), there is
+no gradient at all: p = 0.40, μ² = +0.300 LWPC vs +0.310 LWPS (§15.7). So the
+intuitive alternative was run, and it is null for a principled reason. §15.2's
+four-row A/B/C/D table is the tool for showing why signed and magnitude `delta`
+are not interchangeable — consider promoting it out of this doc.
+
+**"Couldn't this be one model instead of a pipeline of subtractions?"** In
+principle yes — a single trial-level hierarchical model with location as a
+predictor, where the quantity is one high-order interaction coefficient. Worth
+knowing, because it shows the depth lives in the **estimand**, not in this
+pipeline: any correct approach has the same depth, it just hides it in a
+coefficient name. The pipeline formulation was chosen because it is what makes
+the **split-half reliability** and the **within-electrode swap null** possible,
+and neither is easy to obtain from a monolithic model. That is a substantive
+justification, not a preference — state it.
+
+### 18.4 Where each register goes
+
+| Location | Register |
+|---|---|
+| Abstract / headline | the proportion sentence (55 % → 40 %); no subtractions |
+| Results, first mention | "effect-type × location interaction"; model-term language only |
+| Methods | the arithmetic, once, plus the two defensive sentences from §18.1 and §18.3 |
+| Figure 1 | the four-panel schematic |
+| **Never in main text** | "difference of difference-of-differences" |
+
+The depth is a property of the question — "do two adaptation effects have
+different anatomical distributions" cannot be asked with fewer layers. What is
+controllable is whether the arithmetic is narrated or the estimand is named.

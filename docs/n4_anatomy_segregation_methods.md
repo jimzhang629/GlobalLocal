@@ -98,15 +98,34 @@ between-participant structure.
 
 Split-half reproducibility was estimated in parallel as the mean across splits
 of `rho(LWPC_A, LWPC_B)` and `rho(LWPS_A, LWPS_B)`, after the same nuisance
-adjustments. We also report the attenuation-corrected cross-effect correlation,
-`rho / sqrt(reliability_LWPC × reliability_LWPS)`, when both reliabilities were
-positive. This corrected value was treated as a diagnostic, not a bounded
-estimate or formal noise ceiling; it can be unstable or exceed ±1 when either
-reliability is small. A near-zero cross-effect association was interpreted as
-evidence for distinct spatial patterns only when both maps were sufficiently
-reliable. Because the current implementation does not perform an equivalence
-test against a prespecified smallest shared association, a nonsignificant
-correlation alone was not interpreted as proof of segregation.
+adjustments. Both the cross-effect term and the two reliabilities were computed
+from half-length estimates, so they share a common trial count and their ratio
+is the attenuation correction without further adjustment; the reliabilities were
+deliberately not corrected to full length, which would have paired a full-length
+ceiling with a half-length numerator and understated the ratio.
+
+We report the attenuation-corrected cross-effect correlation,
+`r / sqrt(reliability_LWPC × reliability_LWPS)`. This correction was computed
+from **Pearson** correlations irrespective of the rank-based statistic used for
+the uncorrected cross-effect term, because the attenuation formula is
+classical-test-theory algebra for linear measurements. A rank transform is
+non-linear and deflates the self-reliabilities substantially more than it
+deflates the cross term, so a rank-based ratio is not an attenuation correction
+and can fall far outside the interval a correlation may occupy. We additionally
+report a bootstrap interval for the corrected value over splits, and we treat a
+corrected value outside ±1 as an indication that the reliabilities are too small
+to bound the comparison rather than as an estimate, reporting the uncorrected
+correlation and the two reliabilities in that case. Where a map's reliability
+was not positive, the corrected value was reported as undefined.
+
+A near-zero cross-effect association was interpreted as evidence for distinct
+spatial patterns only when both maps were sufficiently reliable. Because the
+current implementation does not perform an equivalence test against a
+prespecified smallest shared association, a nonsignificant correlation alone was
+not interpreted as proof of segregation. Conversely, a corrected association
+near unity was interpreted as indicating that the reliably measured spatial
+variance is largely common to both effects, and not as evidence that no
+systematic difference between them exists on any single spatial axis.
 
 The pipeline currently requires responsiveness adjustment and uses one pooled
 slope across participants. Because responsiveness may contain genuine shared
@@ -169,6 +188,34 @@ subtracted. The primary anatomical outcome, `delta`, is positive where an
 electrode is relatively more LWPC-dominant and negative where it is relatively
 more LWPS-dominant. A value near zero indicates similar scaled scores and does
 not imply that both effects are absent.
+
+### Rationale for testing the within-electrode difference
+
+The anatomical outcome is a within-electrode difference between two effects,
+each of which is itself an interaction. We adopted this outcome because the
+alternative — estimating the anatomical distribution of LWPC and of LWPS
+separately and comparing the locations at which each reached significance — does
+not test the hypothesis of interest. A difference between a significant effect
+and a non-significant effect is not itself significant (Nieuwenhuis, Forstmann,
+& Wagenmakers, 2011), so a comparison of separately thresholded maps cannot
+support a claim that the two effects are differentially distributed. Forming the
+difference within each electrode before modelling anatomy makes the tested
+quantity an explicit effect-type × location interaction and is the minimum
+analysis that licenses the anatomical claim.
+
+The same quantity could be expressed as a single high-order interaction
+coefficient in a trial-level hierarchical model. We estimated it through
+per-electrode scores instead because that formulation supports the two
+inferential devices the design depends on: disjoint-half estimation of each map's
+reliability, which bounds how similar the two maps could appear, and the
+within-electrode effect-label exchange null, which holds participant, anatomy,
+coverage, responsiveness, and both observed score values fixed while removing
+only the assignment of scores to effect types.
+
+We report the outcome in the main text as the balance between a stability score
+and a flexibility score rather than as a sequence of subtractions, and, where a
+single summary is required, as the proportion of electrodes at which stability
+regulation dominated.
 
 ## Primary coverage-conditioned anatomical test
 
@@ -251,6 +298,25 @@ estimates. Coordinate-block and axis results are identified as secondary, and
 medoids as descriptive. The primary anatomical claim is phrased as variation
 in the **relative LWPC/LWPS balance** across cortex; it is not inferred from an
 LWPC test being significant in one location while an LWPS test is not.
+
+Axis-specific coordinate slopes are follow-ups to the coordinate-block test;
+where a single axis is emphasized we state that three axes were fitted and
+report the Bonferroni-adjusted value alongside the nominal one. Where the
+omnibus anatomical test is supported but no individual unit survives FDR
+correction, the omnibus is reported as the claim and no unit is identified as
+its driver; unit-level adjusted means are presented as an ordering rather than
+as separate results.
+
+Individual electrode scores are not interpreted. At the split-half
+reliabilities obtained here, a single electrode's score is dominated by
+measurement noise, and the quantities carried forward are the low-dimensional
+summaries — the cross-effect correlation and the coordinate slopes — whose
+reproducibility was verified directly by refitting them within disjoint trial
+halves. We likewise do not treat the visual separation of thresholded electrode
+maps as evidence of anatomical segregation: at the marginal rates observed
+here, statistical independence alone would place only a minority of electrodes
+in both maps, so apparent disjointness is the expected appearance of any pair
+of imperfectly reliable maps.
 
 The archived analysis record comprised the git commit, exact submission
 command, input score and split-resolved tables, time window, electrode and ROI
