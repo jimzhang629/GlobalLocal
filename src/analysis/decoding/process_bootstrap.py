@@ -69,6 +69,18 @@ def run_pooled_shuffle_for_roi(roi, roi_labeled_arrays, strings_to_find, args, r
         step_size=args.step_size
     )
     
+def first_time_point(roi_labeled_arrays):
+    """Time (s) of the epoch's first sample, read from the time labels.
+
+    The arrays carry the epochs' own `times` on their last axis, so this is -1.0
+    for the stimulus-locked -1.0 to 1.5 s epochs and -1.5 for response-locked
+    -1.5 to 1.5 s ones. Hardcoding -1 shifted every window of a response-locked
+    run by half a second.
+    """
+    labeled_array = next(iter(roi_labeled_arrays.values()))
+    return float(labeled_array.labels[-1][0])
+
+
 def process_bootstrap(bootstrap_idx, subjects_mne_objects, args, rois, condition_names, electrodes, condition_comparisons, save_dir):
     """
     Generates and processes a single bootstrap sample for decoding.
@@ -182,7 +194,7 @@ def process_bootstrap(bootstrap_idx, subjects_mne_objects, args, rois, condition
             step_size=args.step_size,
             n_perm=args.n_shuffle_perms,
             sampling_rate=args.sampling_rate,
-            first_time_point=-1,
+            first_time_point=first_time_point(roi_labeled_arrays_this_bootstrap),
             folds_as_samples=args.folds_as_samples
         )
         

@@ -1227,3 +1227,23 @@ stimulus_switch_type_by_block_conditions = {
         'switchProportion': '75%',
     },
 }
+
+
+# Response-locked copies of the two block-pinned sets above: the same eight cells,
+# named Response_<c|i|r|s>_<block> (e.g. Response_c_MI_MR) and pointing at the
+# Response/ events. The metadata_query does not name the event type -- response
+# events parse into the same congruency / task_sequence / proportion columns --
+# so it carries over unchanged and selects the same trials as the stimulus cell.
+# Decode these on a response-locked EPOCHS_ROOT_FILE.
+def _response_locked(stimulus_conditions):
+    return {
+        name.replace('Stimulus_', 'Response_', 1): {
+            **spec,
+            'BIDS_events': [e.replace('Stimulus/', 'Response/', 1) for e in spec['BIDS_events']],
+        }
+        for name, spec in stimulus_conditions.items()
+    }
+
+
+response_congruency_by_block_conditions = _response_locked(stimulus_congruency_by_block_conditions)
+response_switch_type_by_block_conditions = _response_locked(stimulus_switch_type_by_block_conditions)

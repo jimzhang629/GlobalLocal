@@ -4,7 +4,9 @@ import os
 import numpy as np
 
 from .accuracy_stats import get_pooled_accuracy_distributions_for_comparison, run_two_one_tailed_tests_with_time_perm_cluster
-from .plots.accuracies import plot_accuracies_nature_style, plot_accuracies_with_multiple_sig_clusters
+from .plots.accuracies import (
+    plot_accuracies_nature_style, plot_accuracies_with_multiple_sig_clusters, time_axis_label,
+)
 
 def run_context_comparison_analysis(
     condition_name,
@@ -227,6 +229,7 @@ def run_context_comparison_analysis(
             show_legend=args.show_legend,
             ylim=(0.3, 0.8),
             ylabel=ylabel,
+            xlabel=time_axis_label(getattr(args, 'epochs_root_file', None)),
             show_chance_level=False,
             title=_short_title(roi),
             filename_suffix=analysis_params_str,
@@ -265,6 +268,7 @@ def run_context_comparison_analysis(
             show_legend=args.show_legend,
             ylim=diff_ylim,
             ylabel='Accuracy difference',
+            xlabel=time_axis_label(getattr(args, 'epochs_root_file', None)),
             show_chance_level=True,
             chance_level=0,
             title=f'{_short_title(roi)}: {label_1} − {label_2}',

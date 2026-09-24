@@ -127,6 +127,10 @@ def test_block_balanced_conditions_cancel_the_block_offset(
     'stimulus_lwps_block_balanced_conditions',
     'stimulus_congruency_by_switch_prop_block_balanced_conditions',
     'stimulus_switch_type_by_inc_prop_block_balanced_conditions',
+    'response_lwpc_block_balanced_conditions',
+    'response_lwps_block_balanced_conditions',
+    'response_congruency_by_switch_prop_block_balanced_conditions',
+    'response_switch_type_by_inc_prop_block_balanced_conditions',
 ])
 def test_registry_entries_are_runnable_for_power_traces(label):
     """Every factor the ANOVA names must exist on every condition."""
@@ -151,6 +155,10 @@ def test_entries_sharing_a_conditions_obj_declare_the_same_model():
          'stimulus_congruency_by_switch_prop_block_balanced_conditions'),
         ('stimulus_lwps_block_balanced_conditions',
          'stimulus_switch_type_by_inc_prop_block_balanced_conditions'),
+        ('response_lwpc_block_balanced_conditions',
+         'response_congruency_by_switch_prop_block_balanced_conditions'),
+        ('response_lwps_block_balanced_conditions',
+         'response_switch_type_by_inc_prop_block_balanced_conditions'),
     ]
     for a, b in pairs:
         assert get_conditions_obj(a) is get_conditions_obj(b)
@@ -164,6 +172,8 @@ def test_block_condition_factor_keys_match_their_metadata_query():
     for var, level_key, query_col in [
         ('stimulus_congruency_by_block_conditions', 'congruency', 'congruency'),
         ('stimulus_switch_type_by_block_conditions', 'switchType', 'task_sequence'),
+        ('response_congruency_by_block_conditions', 'congruency', 'congruency'),
+        ('response_switch_type_by_block_conditions', 'switchType', 'task_sequence'),
     ]:
         conds = getattr(experiment_conditions, var)
         assert len(conds) == 8, f'{var} should have 8 block cells'

@@ -32,7 +32,7 @@ from src.analysis.config.condition_registry import (
 from src.analysis.decoding.anova_electrode_selection import (
     short_decoding_figure_title,
 )
-from .accuracies import plot_accuracies_with_multiple_sig_clusters
+from .accuracies import plot_accuracies_with_multiple_sig_clusters, time_axis_label
 
 __all__ = [
     'BLOCK_BALANCED_DECODING_CONDITIONS',
@@ -388,6 +388,7 @@ def replot_master_results(
     # The registry already names the y-axis per analysis; only analyses with
     # no context comparison fall back to the generic label.
     ylabel = context.get('ylabel', 'Decoding accuracy')
+    plot_kwargs.setdefault('xlabel', time_axis_label(args.get('epochs_root_file')))
 
     written = []
     for roi in rois:

@@ -16,6 +16,8 @@ To add a new condition:
    - 'anova_interactions' (optional): list of dicts describing 2-way interactions to plot/test
 """
 
+import copy
+
 from src.analysis.config import experiment_conditions
 
 CONDITION_REGISTRY = {
@@ -1040,6 +1042,50 @@ CONDITION_REGISTRY = {
 
 }
 
+
+# =========================================================================
+# Block-balanced Analyses 1-4, response-locked
+#
+# The same four analyses on response-locked epochs, to check whether the
+# stimulus-locked block effects are just reaction-time differences. Each entry
+# is a copy of its stimulus_ entry above with every condition name switched
+# from Stimulus_ to Response_, so the comparisons, balancing, ANOVA model,
+# colours and legend labels stay identical. Run them with a response-locked
+# EPOCHS_ROOT_FILE.
+# =========================================================================
+
+def _response_locked(stimulus_label, response_conditions_obj):
+    entry = copy.deepcopy(CONDITION_REGISTRY[stimulus_label])
+    to_response = lambda name: name.replace('Stimulus_', 'Response_', 1)
+
+    entry['conditions_obj'] = response_conditions_obj
+    entry['comparisons'] = {
+        key: [[to_response(n) for n in group] for group in groups]
+        for key, groups in entry['comparisons'].items()
+    }
+    for shuffle in entry['pooled_shuffle']:
+        shuffle['strings_to_find'] = [[to_response(n) for n in group]
+                                      for group in shuffle['strings_to_find']]
+    context = entry['context_comparison']
+    context['condition_name'] += '_response_locked'
+    context['display_name'] += ' (response-locked)'
+    return entry
+
+
+CONDITION_REGISTRY.update({
+    'response_lwpc_block_balanced_conditions': _response_locked(
+        'stimulus_lwpc_block_balanced_conditions',
+        experiment_conditions.response_congruency_by_block_conditions),
+    'response_lwps_block_balanced_conditions': _response_locked(
+        'stimulus_lwps_block_balanced_conditions',
+        experiment_conditions.response_switch_type_by_block_conditions),
+    'response_congruency_by_switch_prop_block_balanced_conditions': _response_locked(
+        'stimulus_congruency_by_switch_prop_block_balanced_conditions',
+        experiment_conditions.response_congruency_by_block_conditions),
+    'response_switch_type_by_inc_prop_block_balanced_conditions': _response_locked(
+        'stimulus_switch_type_by_inc_prop_block_balanced_conditions',
+        experiment_conditions.response_switch_type_by_block_conditions),
+})
 
 
 # =============================================================================

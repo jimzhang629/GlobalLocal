@@ -555,6 +555,16 @@ def _tick_label(value):
     return text if text not in ('', '-0') else '0'
 
 
+def time_axis_label(epochs_root_file):
+    """X-axis label for decoding on ``epochs_root_file``.
+
+    Response-locked epochs roots start with ``Response_``; everything else is
+    stimulus-locked.
+    """
+    event = 'response' if str(epochs_root_file or '').startswith('Response') else 'stimulus'
+    return f'Time from {event} onset (s)'
+
+
 def _xticks(xlim, step):
     """Ticks at multiples of ``step`` within ``xlim``."""
     if not step or step <= 0:

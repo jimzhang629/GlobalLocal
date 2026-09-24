@@ -85,6 +85,7 @@ from src.analysis.decoding.decoding import (
     run_context_comparison_analysis,
     plot_cross_block_overlay,
 )
+from src.analysis.decoding.plots.accuracies import time_axis_label
 
 
 from src.analysis.decoding.process_bootstrap import process_bootstrap
@@ -306,6 +307,7 @@ def run_decoding_for_one_electrode_set(
                     show_legend=args.show_legend,
                     ylim=(0.3, 1.0),
                     show_chance_level=False, # The pooled shuffle line is the new chance level
+                    xlabel=time_axis_label(args.epochs_root_file),
                     title=short_decoding_figure_title(
                         f'{get_display_name(args.condition_label)}: {true_label}',
                         set_label),

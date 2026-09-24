@@ -6,6 +6,12 @@ CONDITIONS=(
     stimulus_lwps_block_balanced_conditions
     stimulus_congruency_by_switch_prop_block_balanced_conditions
     stimulus_switch_type_by_inc_prop_block_balanced_conditions
+    # Response-locked versions of the four above. They need response-locked
+    # epochs: set EPOCHS_ROOT_FILE in run_decoding_dcc.py to a Response_ root.
+    # response_lwpc_block_balanced_conditions
+    # response_lwps_block_balanced_conditions
+    # response_congruency_by_switch_prop_block_balanced_conditions
+    # response_switch_type_by_inc_prop_block_balanced_conditions
 )
 
 # Override this in the environment when decoding a different epochs dataset.
