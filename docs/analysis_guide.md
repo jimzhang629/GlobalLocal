@@ -2365,13 +2365,15 @@ has to run on the electrodes of the transfer it controls. Results go to
 with the N3b file layout (`summary.txt`, `task_transfer.json`,
 `task_transfer_traces.npz`, one figure per transfer).
 
-Dry run first (about 10 minutes on 4 cores; the planted answer is T1 at chance
-while T2 transfers, and `SYNTHETIC_CODE=carryover` plants the previous-task
-confound instead):
+Dry run first. The planted answer is T1 at chance while T2 transfers;
+`SYNTHETIC_CODE=carryover` plants the previous-task confound instead. It decodes
+all 4 designs × 2 centerings, and each took about 8 minutes at `N_REPEATS=5` on
+a busy 4-core machine, so submit it rather than running it on a laptop (the
+window must fit the 32-sample synthetic epochs):
 
 ```bash
-ANALYSIS=task_transfer DATA_SOURCE=synthetic SYNTHETIC_CODE=congruency_specific \
-    N_REPEATS=5 WINDOW_SIZE=16 STEP_SIZE=8 python run_stability_flexibility_cross_decoding_dcc.py
+DATA_SOURCE=synthetic SYNTHETIC_CODE=congruency_specific N_REPEATS=5 \
+    WINDOW_SIZE=16 STEP_SIZE=8 bash submit_task_transfer_dcc.sh
 ```
 
 Reading, in this order:
