@@ -48,8 +48,8 @@ ELECTRODE_SELECTION_SPLIT=true SAVE_DIR=<a folder of its own> \
 Then open `summary.txt` in the save directory printed near the top of
 `out/slurm_<jobid>_<jobname>.out`. For each electrode group, the result is three
 numbers per transfer direction: how many windows beat the shuffle null, how many
-fall below the within-contrast ceiling, and what share of the ceiling it keeps
-(§8).
+fall below the within-contrast ceiling, and what share of the ceiling it keeps.
+The share is the one to lead with (§8).
 
 ---
 
@@ -458,11 +458,16 @@ DATA_SOURCE=synthetic ELECTRODE_DEFINITION=none WINDOW_SIZE=16 STEP_SIZE=8 \
   `STEP_SIZE=8`).
 - Single-threaded BLAS matters off the cluster: the LDA fits are small, and with
   the default threading three runs on a 4-core machine were still in the first
-  design after 13 minutes; with the `export` line they finished in minutes.
+  design after 13 minutes; with the `export` line all three finished in about
+  6 minutes.
 - Output goes to `results/synthetic_<code>/...`, never to a real run's folder.
-- **Planted answer:** under `shared` the transfers beat shuffle and keep most of
-  their ceiling; under `orthogonal` both ceilings beat shuffle and the transfers
-  sit at shuffle. If that does not happen, a real-data null means nothing.
+- **Planted answer:** under `shared` every transfer beats shuffle and keeps
+  over 90% of its ceiling; under `orthogonal` every ceiling beats shuffle and
+  every transfer sits at shuffle (§8.1). If that does not happen, a real-data
+  null means nothing.
+- The synthetic `S_only`/`F_only` groups are arbitrary halves of the channels,
+  not selected on anything, so under `shared` they transfer as well as `both`.
+  The dry run tests the machinery, not the "only `both` transfers" prediction.
 - The synthetic data have no pre-stimulus period, but the time axis still starts
   at `FIRST_TIME_POINT` (−1.0), so ignore the axis labels on these figures.
 - `bash submit_... ` with `DATA_SOURCE=synthetic WINDOW_SIZE=16 STEP_SIZE=16`
@@ -545,45 +550,56 @@ at −0.125 s.
 
 ### 8.1 What `summary.txt` looks like
 
-The layout, with `…` for numbers (written by `write_summary`):
+The file opens with every setting of the run (including
+`electrode_group_sizes`), then one block per design in the order A4(0), A4(0b),
+A4(a), A4(c), then a reading guide. These excerpts are from the §7.1 dry runs
+(3 windows, 10 repeats).
+
+`SYNTHETIC_CODE=shared` — one axis for both contrasts:
 
 ```
-========================================================================
-STABILITY vs FLEXIBILITY — A4 CROSS-DECODING
-========================================================================
-           data_source: real
-  electrode_definition: csv
-       reference_group: all
- electrode_group_sizes: {'both': …, 'congruency_only': …, 'switch_type_only': …, 'all': …}
-                window: [0.0, 1.5]s
-               …        (every other setting of the run)
-------------------------------------------------------------------------
-A4(0) within-block decoding baseline (Fig 9):            <- 16-cell runs only
-   congruency (LWPC) | block 25% incongruent: mean acc=… peak=… sig windows=k/n
-   congruency (LWPC) | block 75% incongruent: mean acc=… peak=… sig windows=k/n
-      Δ(block) on mean accuracy = …
-   switchType (LWPS) | block 25% switch: …
-------------------------------------------------------------------------
-A4(0b) per-group within-block 2x2 (…diagonal cell is omitted by design):
-   [congruency] n_electrodes=… ignored cell=('congruency', 'any block')
-       switchType by switch_proportion [25%]: mean acc=… sig=k/nw
-------------------------------------------------------------------------
-A4(a) label transfer by group. …
-   [both] stab_to_stab: mean acc=… peak=… (shuffle …) sig windows=k/n
-   [both] flex_to_flex: …
-   [both] stab_to_flex: mean acc=… peak=… (shuffle …) sig windows=k/n
-         vs flex_to_flex, its ceiling: below it in m windows; keeps X% of it above chance
-   [both] flex_to_stab: …
-         vs stab_to_stab, its ceiling: …
-   [congruency_only] …    [switch_type_only] …    [all] …
-------------------------------------------------------------------------
+A4(a) label transfer by group. ...
+   [both] stab_to_stab: mean acc=0.740 peak=0.745 (shuffle 0.497) sig windows=3/3
+   [both] flex_to_flex: mean acc=0.751 peak=0.764 (shuffle 0.498) sig windows=3/3
+   [both] stab_to_flex: mean acc=0.731 peak=0.741 (shuffle 0.497) sig windows=3/3
+         vs flex_to_flex, its ceiling: below it in 3 windows; keeps 92% of it above chance
+   [both] flex_to_stab: mean acc=0.725 peak=0.730 (shuffle 0.498) sig windows=3/3
+         vs stab_to_stab, its ceiling: below it in 3 windows; keeps 94% of it above chance
+   [S_only] stab_to_flex: mean acc=0.729 peak=0.745 (shuffle 0.500) sig windows=3/3
+         vs flex_to_flex, its ceiling: below it in 0 windows; keeps 94% of it above chance
+   ...
 A4(c) temporal generalization (Fig 10):
-   stability (within) [both]: mean diagonal=… mean off-diagonal=… (… code)
-   flexibility (within) [both]: …
-   stability->flexibility (cross) [both]: …
-========================================================================
-Reading: …
+   stability (within) [both]: mean diagonal=0.743  mean off-diagonal=0.625  (sustained/stable code)
+   flexibility (within) [both]: mean diagonal=0.752  mean off-diagonal=0.603  (sustained/stable code)
+   stability->flexibility (cross) [both]: mean diagonal=0.728  mean off-diagonal=0.625  (sustained/stable code)
 ```
+
+`SYNTHETIC_CODE=orthogonal` — the two contrasts on orthogonal axes:
+
+```
+   [both] stab_to_stab: mean acc=0.935 peak=0.982 (shuffle 0.495) sig windows=3/3
+   [both] flex_to_flex: mean acc=0.935 peak=0.978 (shuffle 0.497) sig windows=3/3
+   [both] stab_to_flex: mean acc=0.496 peak=0.502 (shuffle 0.504) sig windows=0/3
+         vs flex_to_flex, its ceiling: below it in 3 windows; keeps -1% of it above chance
+   [both] flex_to_stab: mean acc=0.503 peak=0.507 (shuffle 0.503) sig windows=0/3
+         vs stab_to_stab, its ceiling: below it in 3 windows; keeps 1% of it above chance
+   ...
+   stability->flexibility (cross) [both]: mean diagonal=0.496  mean off-diagonal=0.499  (diagonal/phasic code)
+```
+
+Three things these runs show that the reading guide below relies on:
+
+- **`keeps X%` is the number to read, not `below it in m windows`.** A fully
+  shared planted code kept 92% on `both` and was still "below" its ceiling in
+  every window; the 20-channel halves kept 94–101% with 0 windows below. The
+  ceiling test uses repeats of the same trials as samples, so it resolves small
+  gaps (§8.3).
+- **Overlap lowers the ceilings.** Within-contrast accuracy is about 0.74 under
+  `shared` and 0.93 under `orthogonal`, with the same planted effect sizes: when
+  both contrasts move trials along one axis, each is noise for the other.
+- **The temporal-generalization label is not a verdict.** A cross matrix at
+  chance (0.496 / 0.499) is labelled `diagonal/phasic code` because its
+  off-diagonal mean is below 0.55.
 
 ### 8.2 Reading it, in order
 
@@ -616,8 +632,8 @@ ceilings, or the split run's, for honest ones.
 | Ceiling | Transfer | Reading |
 |---|---|---|
 | never beats shuffle | anything | **Uninterpretable.** There is no code to transfer. |
-| beats shuffle | beats shuffle, 0 windows below ceiling, keeps ≈ 100% | **One shared axis.** |
-| beats shuffle | beats shuffle, some windows below ceiling, keeps 20–80% | **Partial overlap.** Report the share; do not round it to yes or no. |
+| beats shuffle | beats shuffle, keeps ≈ 90–100% | **One shared axis.** It can still be "below" its ceiling in every window (§8.1). |
+| beats shuffle | beats shuffle, keeps well under 90% | **Partial overlap.** Report the share; do not round it to yes or no. |
 | beats shuffle | 0 sig windows, keeps ≈ 0% | **Separable codes** — both contrasts are decodable but along different axes. |
 | beats shuffle | reliably below shuffle, keeps < 0% | **Anti-aligned axis** (incongruent with repeat). Check the class ordering first ([`cross_decoding_controls.md`](cross_decoding_controls.md) §5). |
 | – | transfer above its own ceiling, or significant well before stimulus onset | **Artifact** (F3, [`cross_decoding_controls.md`](cross_decoding_controls.md) §6). |
@@ -643,8 +659,9 @@ line. Train time is on the y-axis, test time on the x-axis. A bright diagonal
 only is a code that changes over time; a bright square is a stable one. The
 `cross` matrix shows whether congruency trained at one time predicts switch type
 at another. The summary's `sustained/stable` vs `diagonal/phasic` label is a
-threshold (mean off-diagonal > 0.55) over the whole matrix, baseline included, and
-the matrices have no shuffle null or statistic, so treat them as descriptive.
+threshold (mean off-diagonal > 0.55) over the whole matrix, baseline included; a
+matrix at chance everywhere is labelled `diagonal/phasic` too. The matrices have
+no shuffle null or statistic, so treat them as descriptive.
 
 **Step 8 — within-block (16-cell runs only).** A4(0) lists each block's mean
 accuracy and `Δ(block) = high − low`. A negative Δ for congruency means congruency
